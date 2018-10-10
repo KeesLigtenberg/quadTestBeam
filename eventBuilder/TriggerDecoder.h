@@ -171,12 +171,12 @@ inline unsigned long long TriggerDecoder::getNextTrigger(const std::vector<int>&
 			if(word[i]=='1') result+=n;
 			else if( !word[i] ) throw TriggerDecoderException("empty position in word!");
 		}
-		std::cout<<"result="<<result<<" mod="<<modulus<<"\n";
+//		std::cout<<"result="<<result<<" mod="<<modulus<<"\n";
 		result=result%32768+modulus;
 	}
 	
 	//do some checks
-	std::cout<<"result="<<result<<" last="<<lastTrigger<<"\n";
+//	std::cout<<"result="<<result<<" last="<<lastTrigger<<"\n";
 	if(result%32768 < lastTrigger%32768) {
 		if(++triggersOutOfSync<maxTriggerOutOfSync) {
 			if( int(lastTrigger%32768) <= 32768-maxTriggerIncrease) {

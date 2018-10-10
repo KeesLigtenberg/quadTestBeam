@@ -7,7 +7,8 @@
 //Note: slightly different from Hit in testBeamTrackFitter!
 struct Hit {
 	Hit() : row(0), column(0), ToT(0), driftTime(0) {};
-	Hit(unsigned char chipNumber, unsigned short row, unsigned short column, unsigned short ToT, int driftTime) : chip(chipNumber), row(row), column(column), ToT(ToT), driftTime(driftTime) {};
+	Hit(unsigned short row, unsigned short column, unsigned short ToT, int driftTime) :
+		row(row), column(column), ToT(ToT), driftTime(driftTime) {};
 	virtual ~Hit() {}
 	unsigned short row, column, ToT; //charge=ToT
 	int driftTime;

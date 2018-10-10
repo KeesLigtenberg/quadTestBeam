@@ -85,7 +85,8 @@ struct TriggerTreeReader : TreeReader {
 		while(oldToa==toa) {
 			static int warnedDoubleTrigger=0;
 			warnedDoubleTrigger++;
-			if(warnedDoubleTrigger<100) std::cout<<"Warning: double entry in trigger tree at "<<currentEntry<<"\n";
+			if(warnedDoubleTrigger<20) std::cout<<"Warning: double entry in trigger tree at "<<currentEntry<<"\n";
+			if(warnedDoubleTrigger==20) std::cout<<"Suppressing further warnings on double entries in trigger tree\n";
 			tree->GetEntry(++currentEntry);
 		}
 	}
@@ -170,11 +171,11 @@ struct CombinedTreeWriter {
 	TTree tree;
 	std::vector<Hit> chips[4];
 	long long triggerToA;
-	Vec3	laser; //laserposition
+	unsigned triggerNumber;
 
 	CombinedTreeWriter() {
 		tree.Branch( "triggerToA", &triggerToA );
-		tree.Branch( "laser", &laser );
+		tree.Branch( "triggerNumber", &triggerNumber );
 		for(int i=0; i<4; i++)
 			tree.Branch( ("chip"+std::to_string(i)).c_str() , "std::vector<Hit>", chips+i);
 	}
@@ -204,32 +205,32 @@ void convertToTree(std::string inputFileName, std::string outputFileName) {
 
 	triggerReader.updateOffsetAndBinWidth(200);
 
-//	std::cin.get();
-
 	while( not triggerReader.reachedEnd()) {
 		auto trigger=triggerReader.getNextTrigger();
 		if(!(trigger.number%10000)) {
 			std::cout<<trigger.number<<" at time "<<trigger.toa<<"\n";
 		}
+		if(trigger.number>50000) break;
 
 		//set triggerReader
 		outputTrees.triggerToA=trigger.toa;
+		outputTrees.triggerNumber=trigger.number;
 
 		//find all hits within a range of the triggerReader
-		const double maxTimeBeforeTrigger=500*4096/25; //500 ns
-		const double maxTimeAfterTrigger=500*4096/25; //500 ns
+		const unsigned maxTimeBeforeTrigger=500/25*4096; //500 ns
+		const unsigned maxTimeAfterTrigger=500/25*4096; //500 ns
 		for(unsigned i=0; i<chips.size(); i++) {
 			auto& c = chips[i];
-			c->discardEntriesBeforeT(triggerReader.toa-maxTimeBeforeTrigger);
-			while(c->toa < triggerReader.toa+maxTimeAfterTrigger and not c->reachedEnd()) {
-				outputTrees.chips[i].emplace_back(c->row, c->col, c->tot, c->toa-triggerReader.toa );
+			c->discardEntriesBeforeT(trigger.toa-maxTimeBeforeTrigger);
+			while(c->toa < trigger.toa+maxTimeAfterTrigger and not c->reachedEnd()) {
+				outputTrees.chips[i].emplace_back(c->row, c->col, c->tot, c->toa-trigger.toa );
 				c->getNextEntry();
 			}
 		}//for chips
 
 		//fill tree after each triggerReader
 		outputTrees.fill();
-		triggerReader.getNextEntry();
+	}
 
 	outputTrees.tree.Write("data");
 	outputFile.Write();
