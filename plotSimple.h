@@ -8,13 +8,15 @@
 #include "/user/cligtenb/rootmacros/getObjectFromFile.h"
 #include "/user/cligtenb/rootmacros/getHistFromTree.h"
 #include "/user/cligtenb/rootmacros/AllCombiner.h"
+#include "/user/cligtenb/rootmacros/combineOnCanvas.h"
 
 using namespace std;
 
 
 const int nChips=4;
 struct shift {double x,y;};
-std::array<shift,nChips> chipShifts={{ {14.014,0.012}, {-0.026, 10.659}, {14.237, 10.659}, {28.273, 0.006} }};
+//std::array<shift,nChips> chipShifts={{ {14.014,0.012}, {-0.026, 10.659}, {14.237, 10.659}, {28.273, 0.006} }}; //old quad
+std::array<shift,nChips> chipShifts={{ {28.273, 0.006}, {14.237, 10.659}, {-0.026, 10.659} ,{14.014,0.012}  }};
 
 void animateHitmap(std::string filename="tree.root", std::string treename="data") {
 	auto tree=getObjectFromFile<TTree>(treename, filename);
@@ -25,13 +27,13 @@ void animateHitmap(std::string filename="tree.root", std::string treename="data"
 
 	int nEntries=tree->GetEntries();
 	const int entriesPerFrame=1;
-	for(int i=0; i<nEntries; i+=entriesPerFrame) {
+	for(int i=1E5; i<nEntries; i+=entriesPerFrame) {
 		axis->Draw();
 		tree->SetMarkerStyle(7);	
 		const int nChips=4;
 		for(int j=0; j<nChips; j++) {
 			
-			const std::array<int,nChips> colorNumbers{ kRed-8, kBlue-8, kGreen-8, kMagenta-8};
+			const std::array<int,nChips> colorNumbers{ kRed-8, kBlue-8, kGreen-8, kMagenta-8 };
 
 			tree->SetMarkerColor(colorNumbers[j]);
 			auto js=to_string(j);
@@ -47,6 +49,13 @@ void animateHitmap(std::string filename="tree.root", std::string treename="data"
 
 }
 
+void drawTelescopeResiduals( std::string filename = "residualHistograms5.root", std::string histogram="xResidual_") {
+	std::vector<std::string> histNames;
+	for(int i=0; i<6; i++) {
+		histNames.push_back(histogram+std::to_string(i));
+	}
+	auto canv=combineOnCanvas(histNames, filename, 3,2);
+}
 
 		
 void drawHitmap(std::string filename="tree.root", std::string treename="data") {

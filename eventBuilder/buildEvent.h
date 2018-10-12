@@ -100,12 +100,7 @@ struct TriggerTreeReader : TreeReader {
 		std::vector<int> triggerword;
 		//read all bits in this triggernumber
 		while(not reachedEnd() ){
-			try{
 				getNextEntry();
-			} catch (TriggerDecoder::TriggerDecoderException& e) {
-				if(e.description=="wrong zero!") { std::cout<<e.description<<"\n"; continue; }
-				else throw e;
-			}
 //			std::cout<<currentEntry<<" "<<toa<<" ";
 			timeDifference=toa-firstToa;
 			if( timeDifference<newTriggerThreshold) {
@@ -126,20 +121,27 @@ struct TriggerTreeReader : TreeReader {
 
 	void updateOffsetAndBinWidth(int sampleSize=20) {
 		getFirstEntry();
+//		std::cout<<"got first entry\n";
 		double firstBinOffsetSum=0, timeBinWidthSum=0;
 		int firstBinOffsetEntries=0, timeBinWidthEntries=0;
 		for(int i=1; i<=sampleSize; i++) {
 			auto firstToa=toa;
 			auto triggerword=getNextTriggerWord(firstToa);
 
+			if(!triggerword.size() and i==1) {
+				std::cout<<"first trigger is 0\n";
+				i=0; continue;
+			}
+
 			if(i%2) { //triggernumber is odd?'
+//				std::cout<<"trigger number "<<i<<" trying to find offset\n";
 				firstBinOffsetSum+=triggerword.front();
 				++firstBinOffsetEntries;
 			}
 			if(triggerword.size()>1) {
 				std::vector<int> triggerDiffs;
 				 for(unsigned i=0; i+1<triggerword.size(); i++) {
-					triggerDiffs.push_back(triggerword[i+1]-triggerword[i]);
+					triggerDiffs.push_back(triggerword.at(i+1)-triggerword.at(i) );
 //					std::cout<<"diff: "<<triggerDiffs.back()<<"\n";
 				}
 				auto min=std::min_element(triggerDiffs.begin(), triggerDiffs.end());
@@ -161,7 +163,7 @@ struct TriggerTreeReader : TreeReader {
 
 	const double newTriggerThreshold=5E3/25*4096; //time between two seperate triggers
 	const int nbits=15;
-	TriggerDecoder decoder{nbits, 200./25*4096/*timeBinWidth*/, 560/25.*4096 /*first bin offset*/};
+	TriggerDecoder decoder{nbits, 200./25*4096/*timeBinWidth*/, 564/25.*4096 /*first bin offset*/};
 
 };
 
@@ -200,17 +202,25 @@ void convertToTree(std::string inputFileName, std::string outputFileName) {
 	TriggerTreeReader triggerReader(triggerTree);
 
 	//Output tree
+	std::cout<<"creating output file\n";
 	TFile outputFile((outputFileName).c_str(), "RECREATE"); //use absolute path
 	CombinedTreeWriter outputTrees;
 
-	triggerReader.updateOffsetAndBinWidth(200);
+	std::cout<<"updating offset and bin width..\n";
+//	triggerReader.updateOffsetAndBinWidth(200);
 
 	while( not triggerReader.reachedEnd()) {
-		auto trigger=triggerReader.getNextTrigger();
+		TriggerTreeReader::Trigger trigger;
+		try{
+			trigger=triggerReader.getNextTrigger();
+		} catch (TriggerDecoder::TriggerDecoderException& e) {
+			if(e.description=="wrong zero!") { std::cout<<e.description<<"\n"; continue; }
+			else throw e;
+		}
 		if(!(trigger.number%10000)) {
 			std::cout<<trigger.number<<" at time "<<trigger.toa<<"\n";
 		}
-		if(trigger.number>50000) break;
+//		if(trigger.number>50000) break;
 
 		//set triggerReader
 		outputTrees.triggerToA=trigger.toa;

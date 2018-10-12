@@ -45,7 +45,7 @@ public:
 
 private:
 	unsigned long long lastTrigger=0;
-	const int maxTriggerIncrease=2;
+	const int maxTriggerIncrease=3;
 	int triggersOutOfSync=0;
 	const int maxTriggerOutOfSync=5;
 	const int nbits;
@@ -193,7 +193,9 @@ inline unsigned long long TriggerDecoder::getNextTrigger(const std::vector<int>&
 	else if( result==lastTrigger+1) triggersOutOfSync=0; //succesful!
 	else if ( result<=lastTrigger+maxTriggerIncrease and triggersOutOfSync ) { std::cout<<"warning: trigger increased by "<<result-lastTrigger<<"\n"; }
 	else {
-		if(++triggersOutOfSync<maxTriggerOutOfSync) {
+		if(lastTrigger==0) {//special case: this is the before the first actual trigger
+			throw TriggerDecoderException("wrong zero!");
+		} else if(++triggersOutOfSync<maxTriggerOutOfSync) {
 			std::cout<<"warning: increase in trigger number exceeded maxTriggerIncrease, ignoring increase "<<result-lastTrigger<<"\n";
 			result=lastTrigger+1;
 		} else {

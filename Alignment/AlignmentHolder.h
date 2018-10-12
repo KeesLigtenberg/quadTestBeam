@@ -17,7 +17,7 @@
 #include "TH1.h"
 #include "TH2.h"
 
-#include "PositionHit.h"
+#include "../TrackFitter/PositionHit.h"
 
 #include "/user/cligtenb/rootmacros/getObjectFromFile.h"
 #include "/user/cligtenb/rootmacros/getMeanFromFit.h"
