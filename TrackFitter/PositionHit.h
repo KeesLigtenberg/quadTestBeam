@@ -18,7 +18,7 @@ struct PositionHit : Hit{
 			position(x,y,z), chip(chip), Hit(hit) {};
 	Vec3 position;
 	unsigned char chip;
-	Vec3 residual{}, error{};
+	Vec3 residual{}, error{1,1,1};
 
 	enum class Flag : int {valid=1, highResidualxy=-1, highResidualz=-3, lowToT=-2, smallz=-4} flag=Flag::valid;
 
@@ -34,8 +34,9 @@ struct PositionHit : Hit{
 	}
 };
 
+
 template< class Container=std::vector<PositionHit> >
-Container convertHits(const std::vector<Hit>& hv, unsigned char chip, double driftSpeed, double pixelwidth=0.055, double pixelheight=0.055 ) {
+Container convertHitsTPC(const std::vector<Hit>& hv, unsigned char chip, double driftSpeed, double pixelwidth=0.055, double pixelheight=0.055 ) {
 		Container phv;
 		for(auto& h : hv) {
 			// .5 to center position in pixel, removed?
@@ -44,6 +45,39 @@ Container convertHits(const std::vector<Hit>& hv, unsigned char chip, double dri
 			);
 		}
 		return phv;
+}
+
+
+template< class Container=std::vector<PositionHit> >
+Container convertHits(const std::vector<Hit>& hv, unsigned char chip, double planePosition, double pixelwidth=0.055, double pixelheight=0.055 ) {
+		Container phv;
+		for(auto& h : hv) {
+			// .5 to center position in pixel, removed?
+			phv.emplace_back(
+					PositionHit{ (h.column)*pixelwidth/*x*/, (h.row)*pixelheight /*y*/,planePosition /*z*/, chip, h }
+			);
+		}
+		return phv;
+}
+
+PositionHit& flagResidual(PositionHit& h, const TVector3& maxResidual) {
+	if(fabs(h.residual.x)>maxResidual.x()
+			or fabs(h.residual.y)>maxResidual.y() ) {
+		h.flag=PositionHit::Flag::highResidualxy;
+	}
+	if(fabs(h.residual.z)>maxResidual.z()) {
+		h.flag=PositionHit::Flag::highResidualz;
+	}
+	return h;
+}
+
+PositionHit& flagResidualPull(PositionHit& h, const TVector3& maxResidualPull) {
+	for(int i=0; i<2; i++) {
+		if(fabs(h.residual[i])/h.error[i]>maxResidualPull[i]) {
+			h.flag= i==2 ? PositionHit::Flag::highResidualz : PositionHit::Flag::highResidualxy;
+		}
+	}
+	return h;
 }
 
 

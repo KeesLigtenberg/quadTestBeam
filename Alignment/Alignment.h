@@ -23,6 +23,7 @@ struct Alignment {
 	TimeWalkCorrector timeWalk;
 	AlignValueHolder<double> driftSpeed{"DRIFTSPEED"};
 	HitErrorCalculator hitErrors;
+	TelescopeAlignment mimosa;
 
 	Alignment(std::string filename) {
 		read(filename);
@@ -35,6 +36,7 @@ struct Alignment {
 		timeWalk.read(inFile);
 		driftSpeed.read(inFile);
 		hitErrors.read(inFile);
+		mimosa.read(inFile);
 	}
 	void write(std::string filename) {
 		std::ofstream outFile(filename);
@@ -45,6 +47,7 @@ struct Alignment {
 		timeWalk.write(outFile);
 		driftSpeed.write(outFile);
 		hitErrors.write(outFile);
+		mimosa.write(outFile);
 	}
 	void updateAll(TFile& ) ;
 	void updateShifts(TFile& file);

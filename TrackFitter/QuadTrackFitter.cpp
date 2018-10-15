@@ -15,6 +15,7 @@
 
 #include "PositionHit.h"
 #include "../Alignment/TimeWalkCorrector.h"
+#include "../TelescopeTrackFitter/HoughTransformer.h"
 
 #pragma link C++ class std::vector<int>+;
 
@@ -28,30 +29,10 @@ namespace {
 	std::vector<PositionHit> convertHitsQuad( TTreeReaderValue<std::vector<Hit> >* chips, double driftSpeed) {
 		std::vector<PositionHit> hits;
 		for(int i=0; i<nChips; i++) {
-			auto chipHits=convertHits(*chips[i], i, driftSpeed);
+			auto chipHits=convertHitsTPC(*chips[i], i, driftSpeed);
 			hits.insert(hits.end(), chipHits.begin(), chipHits.end() );
 		}
 		return hits;
-	}
-
-	PositionHit& flagResidual(PositionHit& h, const TVector3& maxResidual) {
-		if(fabs(h.residual.x)>maxResidual.x()
-				or fabs(h.residual.y)>maxResidual.y() ) {
-			h.flag=PositionHit::Flag::highResidualxy;
-		}
-		if(fabs(h.residual.z)>maxResidual.z()) {
-			h.flag=PositionHit::Flag::highResidualz;
-		}
-		return h;
-	}
-
-	PositionHit& flagResidualPull(PositionHit& h, const TVector3& maxResidualPull) {
-		for(int i=0; i<2; i++) {
-			if(fabs(h.residual[i])/h.error[i]>maxResidualPull[i]) {
-				h.flag=i==2 ? PositionHit::Flag::highResidualz : PositionHit::Flag::highResidualxy;
-			}
-		}
-		return h;
 	}
 
 	//selection functions for laser points
@@ -185,6 +166,25 @@ QuadTrackFitter::QuadTrackFitter(std::string fileName) :
 QuadTrackFitter::~QuadTrackFitter() {
 }
 
+std::vector<PositionHit> QuadTrackFitter::getSpaceHits(const Alignment& alignment) {
+	//retrieve hits
+	const auto driftSpeed = alignment.driftSpeed.value / 4096 * 25; //in units of mm/ticks
+	posHits = convertHitsQuad(tree.chip, driftSpeed);
+	for (auto& h : posHits) {
+		//apply alignment
+		h = alignment.transform(h);
+		h = alignment.timeWalk.correct(h);
+		//			if(h.position.z<alignment.hitErrors.z0) h.flag=PositionHit::Flag::smallz;
+		h.error = alignment.hitErrors.hitError(h.position.z);
+		/*
+		 h.calculateResidual(laser);
+		 h=flagResidual(h, {2,2,2});
+		 h=flagResidualPull(h, {2,2,3});
+		 */
+	}
+	return posHits;
+}
+
 void QuadTrackFitter::Loop(std::string outputFile,const Alignment& alignment) {
 
 	TFile file(outputFile.c_str(), "RECREATE");
@@ -210,21 +210,9 @@ void QuadTrackFitter::Loop(std::string outputFile,const Alignment& alignment) {
 	while(tree.reader.Next()) {
 		if( !(tree.reader.GetCurrentEntry()%10000) ) std::cout<<"entry "<<tree.reader.GetCurrentEntry()<<" / "<<nEntries<<"\n";
 		//retrieve hits
-		const auto driftSpeed=alignment.driftSpeed.value/4096*25; //in units of mm/ticks
-		posHits=convertHitsQuad(tree.chip, driftSpeed);
-
+		posHits=getSpaceHits(alignment);
 		nHits=std::vector<int>(4);
 		for(auto& h : posHits) {
-			//apply alignment
-			h=alignment.transform(h);
-			h=alignment.timeWalk.correct(h);
-//			if(h.position.z<alignment.hitErrors.z0) h.flag=PositionHit::Flag::smallz;
-			h.error=alignment.hitErrors.hitError(h.position.z);
-/*
-			h.calculateResidual(laser);
-			h=flagResidual(h, {2,2,2});
-			h=flagResidualPull(h, {2,2,3});
-*/
 			if(h.flag==PositionHit::Flag::valid) nHits[h.chip]++;
 		}
 		nHitsPassedTotal=std::accumulate(nHits.begin(), nHits.end(),0);
@@ -254,6 +242,11 @@ void QuadTrackFitter::Loop(std::string outputFile,const Alignment& alignment) {
 		quad.fillEvent();
 
 		fitResults.Fill();
+
+		SimpleDetectorConfiguration setupForDrawing { 10,40 /*x*/, 0,42 /*y beam*/, 0,40/*z drift*/};
+		HoughTransformer::drawCluster(posHits,setupForDrawing);
+		if(processDrawSignals()) break;
+
 	}
 	file.Write();
 }

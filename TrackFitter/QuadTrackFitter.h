@@ -28,6 +28,7 @@ struct QuadTreeReader {
 	std::unique_ptr<TFile> file;
 	TTreeReader reader;
   TTreeReaderValue<Long64_t> triggerToA{reader, "triggerToA"};
+  TTreeReaderValue<unsigned> triggerNumber{reader, "triggerNumber"};
 	TTreeReaderValue<std::vector<Hit> > chip[4] = {
 			{reader, "chip0"},
 			{reader, "chip1"},
@@ -43,10 +44,14 @@ public:
 	QuadTrackFitter(std::string fileName);
 	virtual ~QuadTrackFitter();
 	void Loop(std::string outputFile, const Alignment& alignment);
+	void getEntry(Long64_t entryNumber) { tree.reader.SetEntry(entryNumber);	}
 
 	QuadTreeReader tree;
 	std::vector<PositionHit> posHits;
 
+	unsigned triggerNumber() const { return *tree.triggerNumber; }
+
+	std::vector<PositionHit> getSpaceHits(const Alignment& alignment);
 };
 
 #endif /* LASERDATAFITTER_LASERDATAFITTER_H_ */

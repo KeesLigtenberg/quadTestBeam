@@ -27,7 +27,7 @@ void animateHitmap(std::string filename="tree.root", std::string treename="data"
 
 	int nEntries=tree->GetEntries();
 	const int entriesPerFrame=1;
-	for(int i=1E5; i<nEntries; i+=entriesPerFrame) {
+	for(int i=1E3; i<nEntries; i+=entriesPerFrame) {
 		axis->Draw();
 		tree->SetMarkerStyle(7);	
 		const int nChips=4;
@@ -54,7 +54,15 @@ void drawTelescopeResiduals( std::string filename = "residualHistograms5.root", 
 	for(int i=0; i<6; i++) {
 		histNames.push_back(histogram+std::to_string(i));
 	}
-	auto canv=combineOnCanvas(histNames, filename, 3,2);
+	int i=0;
+	auto canv=combineOnCanvasWithOperation(histNames, filename, 3,2, [&i](TH1* h) {
+		h->SetTitle( ("Plane "+std::to_string(++i)).c_str() );
+		auto h2=dynamic_cast<TH2*>(h);
+		if(h2) {  //for hitmap
+			h2->RebinX(8);
+			h2->RebinY(8);
+		}
+	});
 }
 
 		

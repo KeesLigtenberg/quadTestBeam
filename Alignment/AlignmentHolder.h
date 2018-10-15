@@ -20,7 +20,7 @@
 #include "../TrackFitter/PositionHit.h"
 
 #include "/user/cligtenb/rootmacros/getObjectFromFile.h"
-#include "/user/cligtenb/rootmacros/getMeanFromFit.h"
+#include "../TelescopeTrackFitter/getMeanFromGausFit.h"
 
 namespace { //todo:move to cpp file
 
@@ -273,6 +273,45 @@ private:
 	void writeParameters(std::ostream& out) {
 		out<<z0<<"\n"<<sigma0<<"\n"<<diffusion<<"\n";
 	}
+
+};
+
+struct TelescopeAlignment : AlignmentHolder {
+	TelescopeAlignment() : AlignmentHolder("TELESCOPE") {};
+	std::vector<std::pair<double,double>> shifts;
+	std::vector<std::pair<double,double>> COMs;
+	std::vector<double> angles;
+	std::pair<double,double> slopes;
+
+	const int nPlanes=6;
+
+	virtual void readParameters(std::istream& in) {
+		for(int i=0; i<nPlanes; i++) {
+			std::string buf{};
+			in>>buf;
+			if(buf!="PLANE"+std::to_string(i)) throw 1;
+			double shiftx{}, shifty{}, comx{}, comy{}, anglez{};
+			in>>shiftx>>shifty>>comx>>comy>>anglez;
+			shifts.push_back({shiftx,shifty});
+			COMs.push_back({comx,comy});
+			angles.push_back(anglez);
+		}
+		std::string buf{};
+		in>>buf;
+		if(buf!="SLOPES") throw 1;
+		in>>slopes.first>>slopes.second;
+	}
+	virtual void writeParameters(std::ostream& out) {
+		for(int i=0; i<nPlanes; i++) {
+			out<<"PLANE"<<i<<"\n";
+			out<<shifts[i].first<<" "<<shifts[i].second<<"\n";
+			out<<COMs[i].first<<" "<<COMs[i].second<<"\n";
+			out<<angles[i]<<"\n";
+		}
+		out<<"SLOPES\n";
+		out<<slopes.first<<" "<<slopes.second<<"\n";
+	}
+
 
 };
 
