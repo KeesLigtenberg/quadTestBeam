@@ -17,24 +17,32 @@ public:
 	virtual ~TrackCombiner();
 
 	void Process();
+	void openFile(std::string outputFileName);
 
 private:
 
-	void printTriggers(int telescopeEntry, int tpcEntry) const;
+	void printTriggers(int telescopeEntry, int tpcEntry);
 
 	TelescopeTrackFitter telescopeFitter;
 	QuadTrackFitter quadFitter;
 	Alignment& alignment;
 
+	std::unique_ptr<TFile> outputFile{nullptr};
+	std::unique_ptr<TTree> outputTree{nullptr};
 
-	int triggerOffset=-1;
+	struct TreeEntry {
+		std::vector<FitResult3D> telescopeFits;
+		Vec3 meanQuadPosition;
+	} currentEntry;
+
+	int triggerOffset=0;
 	int nTelescopeTriggers=0;
 	int previousTriggerNumberBegin=0, previousTriggerNumberEnd=0;
 	bool hadFirstMatch=false;
 	int timepixEntryFirstMatch=0;
 
 	enum class MatchResult { match, noMatch, end };
-	TrackCombiner::MatchResult TrackCombiner::getAndMatchEntries(
+	TrackCombiner::MatchResult getAndMatchEntries(
 			int& telescopeEntry,
 			int& tpcStartEntry);
 

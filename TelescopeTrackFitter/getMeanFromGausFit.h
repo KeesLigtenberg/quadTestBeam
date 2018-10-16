@@ -8,6 +8,7 @@
 #ifndef GETMEANFROMGAUSFIT_H_
 #define GETMEANFROMGAUSFIT_H_
 #include "TF1.h"
+#include "TH1.h"
 #include "TFitResult.h"
 #include "TFitResultPtr.h"
 

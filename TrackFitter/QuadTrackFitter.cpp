@@ -171,6 +171,7 @@ std::vector<PositionHit> QuadTrackFitter::getSpaceHits(const Alignment& alignmen
 	const auto driftSpeed = alignment.driftSpeed.value / 4096 * 25; //in units of mm/ticks
 	posHits = convertHitsQuad(tree.chip, driftSpeed);
 	for (auto& h : posHits) {
+		std::cout<<h.ToT<<"\n";
 		//apply alignment
 		h = alignment.transform(h);
 		h = alignment.timeWalk.correct(h);
@@ -206,7 +207,7 @@ void QuadTrackFitter::Loop(std::string outputFile,const Alignment& alignment) {
 	ChipHistogrammer quad{"quad"};
 
 	auto nEntries=tree.reader.GetEntries(false);
-	tree.reader.SetEntriesRange(1E5,2E5);
+	tree.reader.SetEntriesRange(0,2E5);
 	while(tree.reader.Next()) {
 		if( !(tree.reader.GetCurrentEntry()%10000) ) std::cout<<"entry "<<tree.reader.GetCurrentEntry()<<" / "<<nEntries<<"\n";
 		//retrieve hits

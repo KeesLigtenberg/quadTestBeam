@@ -19,7 +19,7 @@
 #include "HoughTransformer.h"
 #include "../TrackFitter/PositionHit.h"
 #include "makeNoisyPixelMask.h"
-#include "linearRegressionFit.h"
+#include "linearRegressionFit.cpp"
 
 class ResidualHistogrammer;
 class TrackHistogrammer;
@@ -32,6 +32,7 @@ public:
 
 	int makeMask(double ntimesThreshold=1e4);
 	void fitTracks( std::string outputfilename );
+	std::vector<FitResult3D> getFits(std::vector<std::vector<PositionHit> >& spaceHit); //helper function for trackCombiner
 
 	std::vector<std::pair<double,double>> getMeanResiduals(); //not constant because adds fits!
 	const std::vector<std::pair<double,double>>& getShifts() const;
@@ -57,7 +58,7 @@ public:
 	bool recalculateCOM=true; //centre of mass
 	bool constructLineParallelToZ=false;
 
-	double maxResidual=0.5;
+	double maxResidual=0.2;
 
 	std::function<bool(const PositionHit&)> selectHitForRefit = [](const PositionHit&){return true;}; //select all hits by default
 

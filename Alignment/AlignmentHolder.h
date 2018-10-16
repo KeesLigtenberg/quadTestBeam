@@ -22,8 +22,8 @@
 #include "/user/cligtenb/rootmacros/getObjectFromFile.h"
 #include "../TelescopeTrackFitter/getMeanFromGausFit.h"
 
-namespace { //todo:move to cpp file
 
+//should actually be in namespace
 	std::istream& operator>>(std::istream& in, TVector3& v) {
 		double x,y,z;
 		in>>x>>y>>z;
@@ -35,6 +35,7 @@ namespace { //todo:move to cpp file
 		return out;
 	}
 
+namespace { //todo:move to cpp file
 	//line segment from line1 to line2, distance to p
 	double getDistanceToLineSegment(TVector2 line1, TVector2 line2, TVector2 p) {
 		line2-=line1;

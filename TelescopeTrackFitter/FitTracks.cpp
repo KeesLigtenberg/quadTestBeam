@@ -14,8 +14,8 @@
 
 #if 1 //root?
 #include "TelescopeTrackFitter.cpp"
-#include "linearRegressionFit.cpp"
-#include "makeNoisyPixelMask.cpp"
+//#include "linearRegressionFit.cpp"
+//#include "makeNoisyPixelMask.cpp"
 #include "ResidualHistogrammer.cpp"
 #endif
 
@@ -30,6 +30,15 @@ using namespace std;
 //	means[0]=std::make_pair(0.,0.);
 //	return means;
 //}
+
+void testFitTracks(std::string inputfile, std::string alignmentFile="") {
+
+	TelescopeTrackFitter telescopeFitter(inputfile, mimosa);
+	telescopeFitter.makeMask(5e3);
+
+	telescopeFitter.fitTracks("test.root");
+
+}
 
 void FitTracks (std::string inputfile, int nRepeatFit=6) {
 

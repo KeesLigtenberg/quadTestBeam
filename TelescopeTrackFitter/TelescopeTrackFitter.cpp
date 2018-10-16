@@ -19,12 +19,14 @@
 #include "TVirtualPad.h"
 #include "TROOT.h"
 #include "TSystem.h"
+#include "TH1.h"
 
 #include "../Alignment/Alignment.h"
 #include "DetectorConfiguration.h"
 #include "/user/cligtenb/rootmacros/getObjectFromFile.h"
 #include "ResidualHistogrammer.h"
 #include "transformHits.h"
+#include "makeNoisyPixelMask.cpp"
 
 using namespace std;
 
@@ -85,7 +87,7 @@ bool TelescopeTrackFitter::passEvent(const std::vector<std::vector<PositionHit> 
 std::vector<std::vector<PositionHit> > TelescopeTrackFitter::getSpaceHits() {
 	std::vector<std::vector<PositionHit> > spaceHit;
 	//apply mask
-	if (mask.empty()) return {{}};
+	if (mask.empty()) {std::cout<<"mask is empty!\n"; return {{}}; }
 	bool allEmptyExcept5=true; //for if last plane is out of sync
 
 	auto itmask = mask.begin();
@@ -110,6 +112,11 @@ std::vector<std::vector<PositionHit> > TelescopeTrackFitter::getSpaceHits() {
 		}
   	else previousEntryHits.clear();
 	}
+
+
+	//apply translation and rotation
+	spaceHit=rotateAndShift(spaceHit);
+
 	return spaceHit;
 }
 
@@ -169,16 +176,16 @@ void TelescopeTrackFitter::fitTracks(std::string outputfilename) {
 
 		//apply mask and convert
 		std::vector<std::vector<PositionHit> > spaceHit = getSpaceHits();
+
 		std::vector<FitResult3D> fits;
 
 		//check event
 		if( !passEvent(spaceHit) ) continue;
+		if(not nPassed) std::cout<<"first entry with hits at "<<iEvent<<"\n";
 		++nPassed;
 
 		//sum x and y here to sum all hits including noise
 
-		//apply translation and rotation
-		spaceHit=rotateAndShift(spaceHit);
 		//hough transform
 		auto houghClusters = houghTransform(spaceHit);
 
@@ -188,7 +195,6 @@ void TelescopeTrackFitter::fitTracks(std::string outputfilename) {
 		if(!houghClusters.size()) {
 			continue;
 		}
-		std::vector<char> clusterHasFit(houghClusters.size(), false);
 
 		//first fit on outer planes and translate inner hits
 		for(auto& hitCluster : houghClusters) {
@@ -215,12 +221,6 @@ void TelescopeTrackFitter::fitTracks(std::string outputfilename) {
 			else fit=regressionFit3d(selectedHits);
 
 			if(!fit.isValid()) {cerr<<"fit not valid!"<<endl; continue;	}
-			fits.push_back(fit);
-
-			hitCluster=calculateResiduals(hitCluster, fit);
-		}
-
-		for(auto& hitCluster : houghClusters) {
 
 			//sum x and y for calculation of centre of mass from track hits
 			if(hitCluster.size()) for(auto& h : hitCluster) {
@@ -228,6 +228,8 @@ void TelescopeTrackFitter::fitTracks(std::string outputfilename) {
 				hitsYSum[h.chip]+=h.position.y;
 				++nHits[h.chip];
 			}
+
+			hitCluster=calculateResiduals(hitCluster, fit);
 
 			residualHistograms->fill(hitCluster, hitsCentre);
 
@@ -248,6 +250,7 @@ void TelescopeTrackFitter::fitTracks(std::string outputfilename) {
 			//sum fit slope
 			slope1Sum+=fit.XZ.slope; slope2Sum+=fit.YZ.slope;
 
+			fits.push_back(fit);
 			if(makeTrackHistograms) { trackHistograms->fill(fit); }
 
 			//give fit errors
@@ -290,6 +293,58 @@ void TelescopeTrackFitter::fitTracks(std::string outputfilename) {
 
 //	cin.get();
 
+}
+
+std::vector<FitResult3D> TelescopeTrackFitter::getFits(std::vector<std::vector<PositionHit> >& spaceHit) {
+	std::vector<FitResult3D> fits;
+
+	//check event
+	if( !passEvent(spaceHit) ) return fits;
+
+	//sum x and y here to sum all hits including noise
+
+	//hough transform
+	auto houghClusters = houghTransform(spaceHit);
+
+	//require at least nmin planes to be hit
+	const int nMinPlanesHit=4;
+	houghClusters.remove_if([](const HoughTransformer::HitCluster& hc){return hc.getNPlanesHit()<nMinPlanesHit; });
+	if(!houghClusters.size()) {
+		 return fits;
+	}
+
+	//first fit on outer planes and translate inner hits
+	for(auto& hitCluster : houghClusters) {
+
+		//fit track
+		if(hitCluster.size()<2 || hitCluster.getNPlanesHit()<=1) continue;
+//			if(hitCluster.isPlaneHit(0)+hitCluster.isPlaneHit(1)+hitCluster.isPlaneHit(2) < 2) continue;
+//			if(hitCluster.isPlaneHit(3)+hitCluster.isPlaneHit(4)+hitCluster.isPlaneHit(5) < 2) continue;
+
+		auto fit=regressionFit3d(hitCluster);
+		if(!fit.isValid()) {cerr<<"fit not valid!"<<endl;  continue;	}
+
+		//remove outliers
+		hitCluster=calculateResiduals(hitCluster, fit);
+		hitCluster=cutOnResiduals(hitCluster, maxResidual);
+
+		//refit on planes with selection
+		HoughTransformer::HitCluster selectedHits;
+		std::copy_if(hitCluster.begin(), hitCluster.end(), std::back_inserter(selectedHits), selectHitForRefit );
+		if(selectedHits.size()<2 || selectedHits.recalculateNPlanesHit()<=1) continue;
+//			if(selectedHits.isPlaneHit(0)+selectedHits.isPlaneHit(1)+selectedHits.isPlaneHit(2) < 2) continue;
+//			if(selectedHits.isPlaneHit(3)+selectedHits.isPlaneHit(4)+selectedHits.isPlaneHit(5) < 2) continue;
+		if(constructLineParallelToZ) fit = makeLinesParallelToZ( selectedHits.front().position.x, selectedHits.front().position.y );
+		else fit=regressionFit3d(selectedHits);
+
+		if(!fit.isValid()) {cerr<<"fit not valid!"<<endl; continue;	}
+
+
+		hitCluster=calculateResiduals(hitCluster, fit);
+		fits.push_back(fit);
+	}
+
+	return fits;
 }
 
 std::vector<std::pair<double, double> > TelescopeTrackFitter::getMeanResiduals() {

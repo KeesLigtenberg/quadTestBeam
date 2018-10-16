@@ -80,6 +80,19 @@ PositionHit& flagResidualPull(PositionHit& h, const TVector3& maxResidualPull) {
 	return h;
 }
 
+template<class Container>
+TVector3 getAveragePosition(Container hv, bool rejectFlagged=false) {
+	TVector3 sum(0,0,0);
+	int n=0;
+	for(const PositionHit& hit : hv) {
+		if(rejectFlagged && hit.flag!=PositionHit::Flag::valid) continue;
+		sum+=hit.position;
+		n++;
+	}
+	sum*=(1./n);
+	return sum;
+}
+
 
 #pragma link C++ class PositionHit+;
 #pragma link C++ class std::vector<PositionHit>+;

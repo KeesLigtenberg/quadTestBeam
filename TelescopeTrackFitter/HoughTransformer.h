@@ -295,6 +295,8 @@ struct HoughTransformer {
 
 template<class T > //=std::list<HitCluster>
 inline void HoughTransformer::drawClusters(const T& clusters, const DetectorConfiguration& detector) {
+	static TCanvas* canvas=new TCanvas("clusters_canvas", "event display", 800,600);
+	canvas->cd();
 	TTree pointTree;
 	PositionHit h;
 	int cluster=1;
@@ -314,8 +316,8 @@ inline void HoughTransformer::drawClusters(const T& clusters, const DetectorConf
 	pointTree.Draw("h.position.x:h.position.y:h.position.z:cluster*10", "", "*colz");
 	TH1* axisObject= dynamic_cast<TH1*>( gPad->GetPrimitive("htemp") );
 	const double xmax=detector.xmax(), ymax=detector.ymax();
-	axisObject->GetZaxis()->SetLimits(0,xmax);
-	axisObject->GetYaxis()->SetLimits(0,ymax);
+	axisObject->GetZaxis()->SetLimits(detector.xmin(),xmax);
+	axisObject->GetYaxis()->SetLimits(detector.ymin(),ymax);
 	axisObject->DrawClone();
 	gPad->Update();
 }
@@ -329,22 +331,31 @@ inline void HoughTransformer::drawCluster(const T& cluster, const DetectorConfig
 
 	for(auto& iHit : cluster ) {
 		h=iHit;
-		if(h.flag==PositionHit::Flag::valid)
+//		std::cout<<int(h.ToT)<<"\n";
+//		if(h.flag==PositionHit::Flag::valid)
 			pointTree.Fill();
 	}
+	if(not pointTree.GetEntries()) return;
 
 	gStyle->SetMarkerStyle(20);
 	gStyle->SetOptTitle(0);
 	double totAxis=1.6;
+	static TCanvas* canv=new TCanvas("cluster_display", "Event display", 800,600);
+	canv->cd();
 	pointTree.Draw( ("h.position.x:h.position.y:h.position.z:TMath::Min(h.ToT*0.025, "+std::to_string(totAxis)+")").c_str() , "", "*colz"); //ToT to microseconds
+
 	TH1* axisObject= dynamic_cast<TH1*>( gPad->GetPrimitive("htemp") );
+	if(!axisObject) {std::cout<<"could not get axis object!?\n"; throw 1;}
 	auto zaxis=axisObject->GetZaxis();
+	if(!zaxis) {std::cout<<"could not get zaxis!?\n"; throw 1;}
 	zaxis->SetLimits(detector.zmin(),detector.zmax());
 	zaxis->SetTitle("z-axis (drift direction) [mm]") ;
 	auto yaxis=axisObject->GetYaxis();
+	if(!yaxis) {std::cout<<"could not get yaxis!?\n"; throw 1;}
 	yaxis->SetTitle("y-axis (beam direction) [mm]");
 	yaxis->SetLimits(detector.ymin(),detector.ymax());
 	auto xaxis=axisObject->GetXaxis();
+	if(!xaxis) {std::cout<<"could not get xaxis!?\n"; throw 1;}
 	xaxis->SetLimits(detector.xmin(),detector.xmax());
 	xaxis->SetTitle("x-axis [mm]");
 	for(auto axis : {xaxis, yaxis} )
@@ -355,12 +366,10 @@ inline void HoughTransformer::drawCluster(const T& cluster, const DetectorConfig
 	}
 //	axisObject->SetMaximum(totAxis);
 //	axisObject->SetMinimum(0);
+
 	axisObject->Draw("colz");
-//	std::cout<<"give angles!"<<std::endl;
-//	std::cin>>theta>>phi;
 	gPad->SetMargin(0.1,0.175,0.15,0.1);//l r b t
 	gPad->Update();
-
 
 	TPaletteAxis* palette= dynamic_cast<TPaletteAxis*>(gPad->GetPrimitive("palette"));
 	if(!palette) throw "could not find paletteAxis!";
@@ -378,8 +387,9 @@ inline void HoughTransformer::drawCluster(const T& cluster, const DetectorConfig
 	paletteAxisLabel->SetTextAlign(kHAlignCenter+kVAlignCenter);
 	paletteAxisLabel->Draw();
 
-
-	double theta=-20,phi=60;
+	double theta=-20 /*70*/,phi=60;
+	//	std::cout<<"give angles!"<<std::endl;
+	//	std::cin>>theta>>phi;
 	gPad->GetView()->RotateView(theta, phi);
 
 	TLegend* legend= new TLegend( 0.6, 0.8, 0.95,0.95 );

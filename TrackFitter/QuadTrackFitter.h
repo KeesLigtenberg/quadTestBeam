@@ -44,12 +44,15 @@ public:
 	QuadTrackFitter(std::string fileName);
 	virtual ~QuadTrackFitter();
 	void Loop(std::string outputFile, const Alignment& alignment);
-	void getEntry(Long64_t entryNumber) { tree.reader.SetEntry(entryNumber);	}
+	TTreeReader::EEntryStatus getEntry(Long64_t entryNumber) {
+		tree.reader.SetLocalEntry(entryNumber);
+		return tree.reader.SetEntry(entryNumber);
+	} //returns false if valid
 
 	QuadTreeReader tree;
 	std::vector<PositionHit> posHits;
 
-	unsigned triggerNumber() const { return *tree.triggerNumber; }
+	unsigned triggerNumber() { return *(tree.triggerNumber); }
 
 	std::vector<PositionHit> getSpaceHits(const Alignment& alignment);
 };
