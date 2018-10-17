@@ -36,9 +36,10 @@ std::string getRunFromFolder(std::string runDir) {
 struct TreeReader {
 	TTree* tree{};
 	unsigned currentEntry{0};
+	const unsigned nEntries{0};
 
 	TreeReader() {};
-	TreeReader(TTree* tree) : tree(tree) {};
+	TreeReader(TTree* tree) : tree(tree), nEntries(tree->GetEntries()) {};
 
 	virtual ~TreeReader() {};
 
@@ -51,7 +52,7 @@ struct TreeReader {
 		tree->GetEntry(++currentEntry);
 	}
 	bool reachedEnd() {
-		return currentEntry+1>=tree->GetEntries();
+		return currentEntry-1>=nEntries;
 	}
 };
 
@@ -82,7 +83,7 @@ struct TriggerTreeReader : TreeReader {
 	virtual void getNextEntry() {
 		auto oldToa=toa;
 		tree->GetEntry(++currentEntry);
-		while(oldToa==toa) {
+		while(oldToa==toa and not reachedEnd() ) {
 			static int warnedDoubleTrigger=0;
 			warnedDoubleTrigger++;
 			if(warnedDoubleTrigger<20) std::cout<<"Warning: double entry in trigger tree at "<<currentEntry<<"\n";
@@ -129,7 +130,8 @@ struct TriggerTreeReader : TreeReader {
 			auto triggerword=getNextTriggerWord(firstToa);
 
 			if(!triggerword.size() and i==1) {
-				std::cout<<"first trigger is 0\n";
+				if(reachedEnd()) break;
+				std::cout<<"first trigger is 0 at entry "<<currentEntry<<"\n"<<std::flush;
 				i=0; continue;
 			}
 
@@ -217,8 +219,10 @@ void convertToTree(std::string inputFileName, std::string outputFileName) {
 			if(e.description=="wrong zero!") { std::cout<<e.description<<"\n"; continue; }
 			else throw e;
 		}
-		if(!(trigger.number%10000)) {
+		if(!(trigger.number%10000) or trigger.number>2239000) {
 			std::cout<<trigger.number<<" at time "<<trigger.toa<<"\n";
+			std::cout<<"trigger reader entry: "<<triggerReader.currentEntry<<"/"<<triggerReader.nEntries<<"\n";
+			std::cout<<"chip 0 reader entry: "<<chips[0]->currentEntry<<"/"<<chips[0]->nEntries<<"\n";
 		}
 //		if(trigger.number>50000) break;
 

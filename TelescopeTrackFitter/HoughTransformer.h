@@ -122,7 +122,7 @@ struct HoughTransformer {
 		std::vector< std::vector< std::unique_ptr<HitCluster> > > houghGrid( xbins );
 		for(auto& v : houghGrid) v.resize(ybins);
 
-		constexpr bool DrawHistogram=false;
+		constexpr bool DrawHistogram=true;
 		std::unique_ptr<TH2D> graphicHistogram{
 				DrawHistogram ?
 				new TH2D("graphicHistogram", "Histogram of hough transform;x bin;y bin", xbins,0,xbins, ybins,0,ybins):
@@ -411,7 +411,7 @@ inline bool processDrawSignals() {
 	if(not printedInfo) { std::cout<<"<return> to continue, 'q' to break\n"; printedInfo=true; };
 
 	char userSignal = std::cin.get();
-	std::cout<<"signal = "<<userSignal<<"\n";
+//	std::cout<<"signal = "<<userSignal<<"\n";
 	if (userSignal == 'q') {
 		if(pdfOpen) {gPad->Print("eventDisplays.pdf]"); pdfOpen=false; }//close pdf
 		return true;

@@ -93,7 +93,7 @@ std::vector<std::vector<PositionHit> > TelescopeTrackFitter::getSpaceHits() {
 	auto itmask = mask.begin();
 //	std::cout<<"trigger "<<triggerNumberBegin<<" - "<<triggerNumberEnd<<"  at time "<<timestamp<<"\n";
 	for (unsigned plane = 0; plane < mimosaHit->size(); plane++) {
-//		std::cout<<"plane "<<plane<<" has "<<mimosaHit->at(plane).size()<<" hits\n";
+//		std::cout<<"plane "<<plane<<" has "<<mimosaHit->at(plane).size()<<" hits, mask size "<<itmask->size()<<"\n";
 		auto maskedHit = applyPixelMask(*itmask++, mimosaHit->at(plane));
 		//convert hits to positions
 		spaceHit.push_back(

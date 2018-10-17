@@ -45,7 +45,7 @@ void FitTracks (std::string inputfile, int nRepeatFit=6) {
 	TelescopeTrackFitter telescopeFitter(inputfile, mimosa);
 
 	telescopeFitter.makeMask(5e3);
-//	telescopeFitter.setShifts( { {0,0}, {0,0}, {0,0}, {0,0}, {0,1}, {0,0} } );
+	telescopeFitter.setShifts( { {0,0}, {0,0}, {0,0}, {0,4}, {0,4}, {0,4} } );
 
 	//initialise alignment parameters
 	double recursion[nRepeatFit],
@@ -54,6 +54,7 @@ void FitTracks (std::string inputfile, int nRepeatFit=6) {
 		rotation[mimosa.nPlanes][nRepeatFit];
 
 	const int firstRefPlane=1, secondRefPlane=4;
+
 
 	for(int i=0; i<nRepeatFit; i++) {
 				cout<<"fitting "<<i<<endl;

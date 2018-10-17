@@ -64,7 +64,9 @@ template <class H=Hit>
 std::vector<H> applyPixelMask(const pixelMask& mask, const std::vector<H>& hv ) {
 	std::vector<H> newhv;
 	for(const H& h:hv)	{
-		if(!mask.at(h.column).at(h.row)) {
+		if(mask.size()<=h.column) {std::cerr<<"applyPixelMask warning: column ("<<h.column<<") out of range ("<<mask.size()<<")\n"; continue;}
+		if(mask[h.column].size()<=h.row) {std::cerr<<"applyPixelMask warning: row out of range\n"; continue;}
+		if(! mask[h.column][h.row] ) {
 			newhv.emplace_back(h);
 		}
 	}
