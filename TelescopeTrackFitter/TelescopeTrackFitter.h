@@ -53,7 +53,7 @@ public:
 	void drawEvent(const std::vector<std::vector<PositionHit> >& spaceHit,
 			const std::vector<FitResult3D>& fits);
 
-	bool displayEvent=true;
+	bool displayEvent=false;
 	bool makeTrackHistograms=false;
 	bool recalculateCOM=true; //centre of mass
 	bool constructLineParallelToZ=false;
@@ -62,8 +62,8 @@ public:
 
 	std::function<bool(const PositionHit&)> selectHitForRefit = [](const PositionHit&){return true;}; //select all hits by default
 
-protected:
 	std::vector<std::vector<PositionHit> > getSpaceHits();
+protected:
 	std::vector<std::vector<PositionHit> >&  rotateAndShift(
 			std::vector<std::vector<PositionHit> >& spaceHit);
 

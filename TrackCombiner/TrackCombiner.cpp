@@ -18,7 +18,6 @@ TrackCombiner::TrackCombiner(std::string quadFile, std::string telescopeFile, Al
 	telescopeFitter.maxResidual=0.05;
 
 	//init quad fitter
-	quadFitter.getEntry(0);
 }
 
 TrackCombiner::~TrackCombiner() {
@@ -37,6 +36,13 @@ void TrackCombiner::Process() {
 	//match entries
 	nTelescopeTriggers=0;
 	telescopeFitter.getEntry(previousTriggerNumberBegin);
+
+	quadFitter.tree.reader.GetEntries(true);
+	quadFitter.tree.reader.Restart();
+	quadFitter.tree.reader.SetEntry(1);
+//	quadFitter.tree.reader.Next();
+
+
 	for(int telescopeEntryNumber=0,tpcEntryNumber=0; //5000000, 2308829
 			telescopeEntryNumber<1E5//telescopeFitter.nEvents//1000000
 			;) {

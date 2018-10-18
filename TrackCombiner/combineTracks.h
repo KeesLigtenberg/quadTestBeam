@@ -10,9 +10,15 @@
 
 #include "TrackCombiner.cpp"
 
-void combineTracks() {
+void combineTracks(std::string quad, std::string mimosa) {
 	Alignment align("align.dat");
-	TrackCombiner tc("../eventBuilder/run668_events.root", "20181005-203345_M26_TELESCOPE_combined.root", align);
+	TrackCombiner tc(quad, mimosa, align);
+
+	tc.telescopeFitter.getEntry(10);
+	auto hits=tc.telescopeFitter.getSpaceHits();
+
+	if(hits.size() ) for(auto& h : hits[0]) std::cout<<h.ToT;
+
 	tc.openFile("combinedFit.root");
 	tc.Process();
 }

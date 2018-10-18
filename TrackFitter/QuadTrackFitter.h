@@ -45,8 +45,9 @@ public:
 	virtual ~QuadTrackFitter();
 	void Loop(std::string outputFile, const Alignment& alignment);
 	TTreeReader::EEntryStatus getEntry(Long64_t entryNumber) {
-		tree.reader.SetLocalEntry(entryNumber);
-		return tree.reader.SetEntry(entryNumber);
+		auto retStatus= tree.reader.SetEntry(entryNumber);
+		std::cout<<"get entry "<<tree.reader.GetCurrentEntry()<<" = "<<retStatus<<"\n";
+		return retStatus;
 	} //returns false if valid
 
 	QuadTreeReader tree;

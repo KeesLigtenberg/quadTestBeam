@@ -220,6 +220,11 @@ void QuadTrackFitter::Loop(std::string outputFile,const Alignment& alignment) {
 		}
 		nHitsPassedTotal=std::accumulate(nHits.begin(), nHits.end(),0);
 
+		if( (nHits[0]>20 and nHits[1]>20) or (nHits[2]>20 and nHits[3]>20) ) {
+		} else {
+			continue;
+		}
+
 		averageHitPosition={0,0,0};
 		for(auto& h : posHits) {
 
@@ -246,10 +251,12 @@ void QuadTrackFitter::Loop(std::string outputFile,const Alignment& alignment) {
 
 		fitResults.Fill();
 
-		SimpleDetectorConfiguration setupForDrawing { 10,40 /*x*/, 0,42 /*y beam*/, 0,40/*z drift*/};
-		HoughTransformer::drawCluster(posHits,setupForDrawing);
-		if(processDrawSignals()) break;
-
+		bool draw=true;
+		if(draw) {
+			SimpleDetectorConfiguration setupForDrawing { 10,40 /*x*/, 0,42 /*y beam*/, -10,40/*z drift*/};
+			HoughTransformer::drawCluster(posHits,setupForDrawing);
+			if(processDrawSignals()) break;
+		}
 	}
 	file.Write();
 }

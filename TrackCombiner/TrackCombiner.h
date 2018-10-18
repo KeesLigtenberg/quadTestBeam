@@ -19,7 +19,6 @@ public:
 	void Process();
 	void openFile(std::string outputFileName);
 
-private:
 
 	void printTriggers(int telescopeEntry, int tpcEntry);
 
@@ -27,6 +26,7 @@ private:
 	QuadTrackFitter quadFitter;
 	Alignment& alignment;
 
+private:
 	std::unique_ptr<TFile> outputFile{nullptr};
 	std::unique_ptr<TTree> outputTree{nullptr};
 

@@ -122,7 +122,7 @@ struct HoughTransformer {
 		std::vector< std::vector< std::unique_ptr<HitCluster> > > houghGrid( xbins );
 		for(auto& v : houghGrid) v.resize(ybins);
 
-		constexpr bool DrawHistogram=true;
+		constexpr bool DrawHistogram=false;
 		std::unique_ptr<TH2D> graphicHistogram{
 				DrawHistogram ?
 				new TH2D("graphicHistogram", "Histogram of hough transform;x bin;y bin", xbins,0,xbins, ybins,0,ybins):
@@ -326,7 +326,7 @@ template<class T > //=std::list<HitCluster>
 inline void HoughTransformer::drawCluster(const T& cluster, const DetectorConfiguration& detector) {
 	TTree pointTree;
 	PositionHit h(1E4,1E4,1E4,0, Hit{0,0,0,0} );
-	pointTree.Branch("h", &h);
+	pointTree.Branch("h", "PositionHit", &h);
 //	pointTree.Fill(); //fill one with zero ToT to set scale
 
 	for(auto& iHit : cluster ) {
@@ -342,7 +342,7 @@ inline void HoughTransformer::drawCluster(const T& cluster, const DetectorConfig
 	double totAxis=1.6;
 	static TCanvas* canv=new TCanvas("cluster_display", "Event display", 800,600);
 	canv->cd();
-	pointTree.Draw( ("h.position.x:h.position.y:h.position.z:TMath::Min(h.ToT*0.025, "+std::to_string(totAxis)+")").c_str() , "", "*colz"); //ToT to microseconds
+	pointTree.Draw( ("h.position.z:h.position.y:h.position.x:TMath::Min(h.ToT*0.025, "+std::to_string(totAxis)+")").c_str() , "", "*colz"); //ToT to microseconds
 
 	TH1* axisObject= dynamic_cast<TH1*>( gPad->GetPrimitive("htemp") );
 	if(!axisObject) {std::cout<<"could not get axis object!?\n"; throw 1;}

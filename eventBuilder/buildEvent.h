@@ -52,7 +52,7 @@ struct TreeReader {
 		tree->GetEntry(++currentEntry);
 	}
 	bool reachedEnd() {
-		return currentEntry-1>=nEntries;
+		return currentEntry+5>=nEntries;
 	}
 };
 
@@ -224,7 +224,7 @@ void convertToTree(std::string inputFileName, std::string outputFileName) {
 			std::cout<<"trigger reader entry: "<<triggerReader.currentEntry<<"/"<<triggerReader.nEntries<<"\n";
 			std::cout<<"chip 0 reader entry: "<<chips[0]->currentEntry<<"/"<<chips[0]->nEntries<<"\n";
 		}
-//		if(trigger.number>50000) break;
+		if(trigger.number>100000) break;
 
 		//set triggerReader
 		outputTrees.triggerToA=trigger.toa;
@@ -245,8 +245,10 @@ void convertToTree(std::string inputFileName, std::string outputFileName) {
 		//fill tree after each triggerReader
 		outputTrees.fill();
 	}
+	std::cout<<"finished reading triggers, now writing trees\n";
 
 	outputTrees.tree.Write("data");
+	std::cout<<"wrote tree, now closing file..\n";
 	outputFile.Write();
 }
 
