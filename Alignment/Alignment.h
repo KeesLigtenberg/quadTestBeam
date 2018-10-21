@@ -15,7 +15,9 @@
 
 #include "AlignmentHolder.h"
 #include "TimeWalkCorrector.h"
-#include "/user/cligtenb/rootmacros/getHistFromTree.h"
+//#include "/user/cligtenb/rootmacros/getHistFromTree.h"
+#include "../../rootmacros/getHistFromTree.h"
+
 
 struct Alignment {
 	std::array<ChipAlignment,4> chips{{0,1,2,3}};
@@ -61,6 +63,14 @@ struct Alignment {
 		auto corners=chips[chipIndex].getChipCorners();
 		for(auto& c : corners) c=quad.rotateAndShift(c);
 		return corners;
+	}
+	std::vector<TVector3> getAllChipCorners() const {
+		std::vector<TVector3> all;
+		for(int i=0; i<4; i++) {
+			auto corners=getChipCorners(i);
+			all.insert(all.end(), corners.begin(), corners.end());
+		}
+		return all;
 	}
 };
 

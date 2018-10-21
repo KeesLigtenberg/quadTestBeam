@@ -11,12 +11,12 @@
 
 ClassImp(FitResult3D);
 
-void FitResult3D::draw(double zmin, double zmax) const {
+void FitResult3D::draw(double zmin, double zmax) const { //in timepix frame, with telescope coordinates!
 	const int npoints=2;
 	double x[npoints] = { XZ.at(zmin), XZ.at(zmax)};
 	double y[npoints] = { YZ.at(zmin), YZ.at(zmax)};
 	double z[npoints] = { zmin, zmax};
-	TPolyLine3D l( npoints, z, y, x );
+	TPolyLine3D l( npoints, x, z, y );
 	l.SetLineColor(kOrange+7);
 	l.SetLineWidth(2);
 	l.DrawClone();

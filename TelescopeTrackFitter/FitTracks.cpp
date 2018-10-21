@@ -5,7 +5,8 @@
 #include "TGraph.h"
 #include "TH1.h"
 
-#include "/user/cligtenb/rootmacros/AllCombiner.h"
+#include "../../rootmacros/AllCombiner.h"
+//#include "/user/cligtenb/rootmacros/AllCombiner.h"
 
 #include "DetectorConfiguration.h"
 #include "TelescopeTrackFitter.h"
@@ -31,9 +32,13 @@ using namespace std;
 //	return means;
 //}
 
-void testFitTracks(std::string inputfile, std::string alignmentFile="") {
+void testFitTracks(std::string inputfile, std::string alignmentFile="align.dat") {
 
 	TelescopeTrackFitter telescopeFitter(inputfile, mimosa);
+	Alignment align(alignmentFile);
+	telescopeFitter.setAlignment(align);
+
+	telescopeFitter.displayEvent=true;
 	telescopeFitter.makeMask(5e3);
 
 	telescopeFitter.fitTracks("test.root");

@@ -24,17 +24,26 @@
 struct QuadTreeReader {
 	QuadTreeReader(std::string treeName, std::string fileName) :
 				file(new TFile(fileName.c_str(), "READ")),
-				reader(treeName.c_str(), file.get() ) {}
+				tree(nullptr) {
+		tree= dynamic_cast<TTree*>(file->Get(treeName.c_str()));
+		if(!tree) {
+			std::cerr<<"could not get tree "<<treeName<<" from file "<<file->GetName()<<std::endl;
+			throw 1;
+		}
+
+		tree->SetBranchAddress("triggerToA", &triggerToA);
+		tree->SetBranchAddress("triggerNumber", &triggerNumber);
+		for(int i=0; i<4; i++) {
+			tree->SetBranchAddress( ("chip"+std::to_string(i)).c_str(), chip+i );
+		}
+	}
+
 	std::unique_ptr<TFile> file;
-	TTreeReader reader;
-  TTreeReaderValue<Long64_t> triggerToA{reader, "triggerToA"};
-  TTreeReaderValue<unsigned> triggerNumber{reader, "triggerNumber"};
-	TTreeReaderValue<std::vector<Hit> > chip[4] = {
-			{reader, "chip0"},
-			{reader, "chip1"},
-			{reader, "chip2"},
-			{reader, "chip3"}
-	};
+	TTree* tree;
+
+	Long64_t triggerToA{};
+  unsigned triggerNumber{};
+	std::vector<Hit>* chip[4]{};
 };
 
 
@@ -44,16 +53,18 @@ public:
 	QuadTrackFitter(std::string fileName);
 	virtual ~QuadTrackFitter();
 	void Loop(std::string outputFile, const Alignment& alignment);
-	TTreeReader::EEntryStatus getEntry(Long64_t entryNumber) {
-		auto retStatus= tree.reader.SetEntry(entryNumber);
-		std::cout<<"get entry "<<tree.reader.GetCurrentEntry()<<" = "<<retStatus<<"\n";
+	int getEntry(Long64_t entryNumber) {
+		if(entryNumber>=reader.tree->GetEntries()) return false;
+		auto retStatus= reader.tree->GetEntry(entryNumber);
+
 		return retStatus;
 	} //returns false if valid
 
-	QuadTreeReader tree;
+	QuadTreeReader reader;
 	std::vector<PositionHit> posHits;
 
-	unsigned triggerNumber() { return *(tree.triggerNumber); }
+	unsigned triggerNumber() { return (reader.triggerNumber); }
+
 
 	std::vector<PositionHit> getSpaceHits(const Alignment& alignment);
 };

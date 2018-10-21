@@ -3,7 +3,9 @@
 #include <iostream>
 
 #include "TH2.h"
-#include "/user/cligtenb/rootmacros/getHistFromTree.h"
+//#include "/user/cligtenb/rootmacros/getHistFromTree.h"
+#include "../../rootmacros/getHistFromTree.h"
+
 
 #include "../TrackFitter/PositionHit.h"
 //#include "getHistFromTree.h"

@@ -122,7 +122,7 @@ struct HoughTransformer {
 		std::vector< std::vector< std::unique_ptr<HitCluster> > > houghGrid( xbins );
 		for(auto& v : houghGrid) v.resize(ybins);
 
-		constexpr bool DrawHistogram=false;
+		constexpr bool DrawHistogram=true;
 		std::unique_ptr<TH2D> graphicHistogram{
 				DrawHistogram ?
 				new TH2D("graphicHistogram", "Histogram of hough transform;x bin;y bin", xbins,0,xbins, ybins,0,ybins):
@@ -313,11 +313,19 @@ inline void HoughTransformer::drawClusters(const T& clusters, const DetectorConf
 	if(not pointTree.GetEntries()) return;
 
 	gStyle->SetMarkerStyle(20);
-	pointTree.Draw("h.position.x:h.position.y:h.position.z:cluster*10", "", "*colz");
+	pointTree.Draw("h.position.y:h.position.z:h.position.x:cluster*10", "", "*colz");
+
+
+	gPad->Update();
+	double theta=-20 /*70*/,phi=60;
+//	std::cout<<"give angles!"<<std::endl;
+//	std::cin>>theta>>phi;
+	gPad->GetView()->RotateView(theta, phi);
+
+
 	TH1* axisObject= dynamic_cast<TH1*>( gPad->GetPrimitive("htemp") );
-	const double xmax=detector.xmax(), ymax=detector.ymax();
-	axisObject->GetZaxis()->SetLimits(detector.xmin(),xmax);
-	axisObject->GetYaxis()->SetLimits(detector.ymin(),ymax);
+	axisObject->GetXaxis()->SetLimits(detector.xmin(),detector.xmax());
+	axisObject->GetZaxis()->SetLimits(detector.ymin(),detector.ymax());
 	axisObject->DrawClone();
 	gPad->Update();
 }
@@ -332,7 +340,7 @@ inline void HoughTransformer::drawCluster(const T& cluster, const DetectorConfig
 	for(auto& iHit : cluster ) {
 		h=iHit;
 //		std::cout<<int(h.ToT)<<"\n";
-//		if(h.flag==PositionHit::Flag::valid)
+		if(h.flag==PositionHit::Flag::valid)
 			pointTree.Fill();
 	}
 	if(not pointTree.GetEntries()) return;
@@ -387,7 +395,7 @@ inline void HoughTransformer::drawCluster(const T& cluster, const DetectorConfig
 	paletteAxisLabel->SetTextAlign(kHAlignCenter+kVAlignCenter);
 	paletteAxisLabel->Draw();
 
-	double theta=-20 /*70*/,phi=60;
+	double theta=-20 /*-20*/,phi=10 /*60*/;
 	//	std::cout<<"give angles!"<<std::endl;
 	//	std::cin>>theta>>phi;
 	gPad->GetView()->RotateView(theta, phi);
@@ -397,7 +405,7 @@ inline void HoughTransformer::drawCluster(const T& cluster, const DetectorConfig
 	legend->AddEntry(axisObject, "Timepix hits", "p");
 	axisObject->SetLineColor(kOrange+7);
 	axisObject->SetLineWidth(2);
-	legend->AddEntry(axisObject, "Track fit", "l");
+	legend->AddEntry(axisObject, "Telescope track", "l");
 	legend->Draw();
 
 	gPad->Update();

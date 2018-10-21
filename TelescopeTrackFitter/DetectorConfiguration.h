@@ -9,6 +9,7 @@
 #define DETECTORCONFIGURATION_H_
 
 #include <utility>
+#include "TVector3.h"
 
 struct DetectorConfiguration {
 	virtual ~DetectorConfiguration() {};
@@ -34,6 +35,13 @@ struct SimpleDetectorConfiguration : DetectorConfiguration {
 	virtual double zmax() const { return maxz; }
 	virtual double zmin() const { return minz; }
 };
+
+SimpleDetectorConfiguration simpleDetectorFromChipCorners( std::vector<TVector3> corners) {
+	auto xmm = std::minmax_element(corners.begin(), corners.end(), [](const TVector3& v, const TVector3& w) {return v.x()<w.x();});
+	auto ymm = std::minmax_element(corners.begin(), corners.end(), [](const TVector3& v, const TVector3& w) {return v.y()<w.y();});
+	auto zmm = std::minmax_element(corners.begin(), corners.end(), [](const TVector3& v, const TVector3& w) {return v.z()<w.z();});
+	return {xmm.first->x(), xmm.second->x(), ymm.first->y(), ymm.second->y(),zmm.first->z(), zmm.second->z()};
+}
 
 struct TelescopeConfiguration : DetectorConfiguration {
 	virtual ~TelescopeConfiguration() {}

@@ -13,6 +13,7 @@
 #include <fstream>
 #include <iterator>
 #include <list>
+#include <utility>
 
 #include "TFile.h"
 #include "TTree.h"
@@ -23,7 +24,8 @@
 
 #include "../Alignment/Alignment.h"
 #include "DetectorConfiguration.h"
-#include "/user/cligtenb/rootmacros/getObjectFromFile.h"
+//#include "/user/cligtenb/rootmacros/getObjectFromFile.h"
+#include "../../rootmacros/getObjectFromFile.h"
 #include "ResidualHistogrammer.h"
 #include "transformHits.h"
 #include "makeNoisyPixelMask.cpp"
@@ -32,7 +34,7 @@ using namespace std;
 
 TelescopeTrackFitter::TelescopeTrackFitter(std::string inputfile, const TelescopeConfiguration& detector) :
 	detector(detector),
-	houghTransform(detector.xmin(), detector.xmax(), detector.ymin(), detector.ymax(), 10/*xbins*/, 5 /*ybins*/ ),
+	houghTransform(detector.xmin(), detector.xmax(), detector.ymin(), detector.ymax(), 15/*xbins*/, 12 /*ybins*/ ),
 	residualHistograms(nullptr),
 	hitsCentre(detector.nPlanes, detector.getCentre() ), //initialise to regular centre of sensor
 	averageResidualFromSum(detector.nPlanes, {0,0} ), //initialise to zero
@@ -43,6 +45,7 @@ TelescopeTrackFitter::TelescopeTrackFitter(std::string inputfile, const Telescop
 	//get tree from file
 	file=openFile(inputfile);
 	hitTable=getObjectFromFile<TTree>("Hits", file);
+
 
 	//setup tree for reading
 	hitTable->SetBranchAddress("mimosa", &mimosaHit);

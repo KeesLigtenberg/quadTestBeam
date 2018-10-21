@@ -22,8 +22,8 @@ public:
 
 	void printTriggers(int telescopeEntry, int tpcEntry);
 
-	TelescopeTrackFitter telescopeFitter;
 	QuadTrackFitter quadFitter;
+	TelescopeTrackFitter telescopeFitter;
 	Alignment& alignment;
 
 private:
@@ -33,6 +33,9 @@ private:
 	struct TreeEntry {
 		std::vector<FitResult3D> telescopeFits;
 		Vec3 meanQuadPosition;
+		std::vector<int> nHitsPerChip;
+		std::vector<PositionHit> quadHits;
+		bool matched;
 	} currentEntry;
 
 	int triggerOffset=0;
@@ -47,5 +50,7 @@ private:
 			int& tpcStartEntry);
 
 };
+
+#pragma link C++ class std::vector<int>+;
 
 #endif /* TRACKCOMBINER_TRACKCOMBINER_H_ */

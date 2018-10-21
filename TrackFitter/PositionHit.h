@@ -93,6 +93,14 @@ TVector3 getAveragePosition(Container hv, bool rejectFlagged=false) {
 	return sum;
 }
 
+std::vector<int> getHitsPerChip(std::vector<PositionHit> hits, bool rejectFlagged=false) {
+	std::vector<int> nHits(4);
+	for(auto& h : hits) {
+		if(rejectFlagged and h.flag!=PositionHit::Flag::valid) continue;
+		nHits[h.chip]++;
+	}
+	return nHits;
+}
 
 #pragma link C++ class PositionHit+;
 #pragma link C++ class std::vector<PositionHit>+;

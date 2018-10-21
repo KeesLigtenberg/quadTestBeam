@@ -19,7 +19,8 @@
 
 #include "../TrackFitter/PositionHit.h"
 
-#include "/user/cligtenb/rootmacros/getObjectFromFile.h"
+//#include "/user/cligtenb/rootmacros/getObjectFromFile.h"//
+#include "../../rootmacros/getObjectFromFile.h"
 #include "../TelescopeTrackFitter/getMeanFromGausFit.h"
 
 

@@ -7,6 +7,12 @@
 
 #include "TrackCombiner.h"
 
+namespace {
+
+
+
+}
+
 TrackCombiner::TrackCombiner(std::string quadFile, std::string telescopeFile, Alignment& alignment) :
 	quadFitter(quadFile),
 	telescopeFitter(telescopeFile, mimosa),
@@ -30,6 +36,9 @@ void TrackCombiner::openFile(std::string outputFileName) {
 
 	outputTree->Branch("telescopeFits", "std::vector<FitResult3D>", &currentEntry.telescopeFits);
 	outputTree->Branch("meanQuadPosition", "Vec3", &currentEntry.meanQuadPosition);
+	outputTree->Branch("nHitsPerChip", "std::vector<int>", &currentEntry.nHitsPerChip);
+	outputTree->Branch("quadHits", "std::vector<PositionHit>", &currentEntry.quadHits);
+	outputTree->Branch("matched", &currentEntry.matched);
 }
 
 void TrackCombiner::Process() {
@@ -37,48 +46,69 @@ void TrackCombiner::Process() {
 	nTelescopeTriggers=0;
 	telescopeFitter.getEntry(previousTriggerNumberBegin);
 
-	quadFitter.tree.reader.GetEntries(true);
-	quadFitter.tree.reader.Restart();
-	quadFitter.tree.reader.SetEntry(1);
-//	quadFitter.tree.reader.Next();
+	quadFitter.reader.tree->GetEntry(0);
 
 
 	for(int telescopeEntryNumber=0,tpcEntryNumber=0; //5000000, 2308829
-			telescopeEntryNumber<1E5//telescopeFitter.nEvents//1000000
+			telescopeEntryNumber<telescopeFitter.nEvents//1000000
 			;) {
 //		triggerStatusHistogram.reset();
 
 		// Get Entry and match trigger Numbers
 		auto matchStatus=getAndMatchEntries(telescopeEntryNumber,tpcEntryNumber);
 		printTriggers(telescopeEntryNumber,tpcEntryNumber);
-		if( matchStatus == MatchResult::end ) { std::cout<<"match is end\n\n"; break;}
-		else if( matchStatus == MatchResult::noMatch) {std::cout<<" no match\n\n"; continue; }
-		else { std::cout<<"match!\n\n"; }
+		if( matchStatus == MatchResult::end ) {
+//			std::cout<<"match is end\n\n";
+			break;}
+		else if( matchStatus == MatchResult::noMatch) {
+//			std::cout<<" no match\n\n";
+			continue; }
+//		else { std::cout<<"match!\n\n"; }
 
 
 		auto telescopeHits=telescopeFitter.getSpaceHits();
 		int nTelescopeHits=0;
 		for(const auto& plane : telescopeHits) nTelescopeHits+=plane.size();
-		std::cout<<"there are "<<nTelescopeHits<<" telescope hits\n";
+//		std::cout<<"there are "<<nTelescopeHits<<" telescope hits\n";
 		if(!nTelescopeHits) continue;
 
  		auto quadHits=quadFitter.getSpaceHits(alignment);
  		if(!quadHits.size()) continue;
+ 		auto nHitsPerChip= getHitsPerChip(quadHits);
+
+ 		const int minHitsPerChip=10;
+ 		if( (nHitsPerChip[0] <minHitsPerChip or nHitsPerChip[1] <minHitsPerChip) and (nHitsPerChip[2]<minHitsPerChip or nHitsPerChip[3]<minHitsPerChip ) ) continue;
+
 
  		std::vector<FitResult3D> telescopeFits=telescopeFitter.getFits(telescopeHits);
 
-		SimpleDetectorConfiguration setupForDrawing { 10,40 /*x*/, 0,42 /*y beam*/, 0,40/*z drift*/};
-//		SimpleDetectorConfiguration setupForDrawing { 10,40 /*x*/, 0,400 /*y beam*/, 0,40/*z drift*/};
+
+ 		auto avPosition=getAveragePosition(quadHits);
+ 		bool matched=false;
+ 		for(auto&f : telescopeFits) {
+ 			if( std::fabs(avPosition.x()-f.xAt(193.25))<2 and std::fabs(avPosition.z()-f.yAt(193.25))<2 ) {
+ 				matched=true;
+// 				calculateResiduals(quadHits, f);
+ 			}
+ 		}
+// 		if(!matched) continue;
+
 
 		const bool drawEvent=true;
-		if(drawEvent) {
+		if(drawEvent and matched) {
+			//		SimpleDetectorConfiguration setupForDrawing { 0,30 /*x*/, 0,42 /*y beam*/, -20,20/*z drift*/};
+			 		auto setupForDrawing=simpleDetectorFromChipCorners(alignment.getAllChipCorners());
+			 		setupForDrawing.minz=-10, setupForDrawing.maxz=30;
+			//		SimpleDetectorConfiguration setupForDrawing { 10,40 /*x*/, 0,400 /*y beam*/, 0,40/*z drift*/};
+
 			std::cout<<"draw telescope hits\n";
 			telescopeFitter.drawEvent(telescopeHits,telescopeFits);
 	//		HoughTransformer::drawClusters(telescopeHits, setupForDrawing);
-	//		for (auto& f : telescopeFits)
-	//			f.draw( setupForDrawing.zmin(), setupForDrawing.zmax() );
 			std::cout<<"draw quad hits "<<quadHits.size()<<"\n";
 			HoughTransformer::drawCluster(quadHits,setupForDrawing);
+			for (auto& f : telescopeFits)
+				f.draw( setupForDrawing.ymin(), setupForDrawing.ymax() );
+			drawQuadOutline(alignment, setupForDrawing.zmin() );
 			gPad->Update();
 			if(processDrawSignals()) break;
 		}
@@ -86,15 +116,20 @@ void TrackCombiner::Process() {
 		if(outputTree) {
 			currentEntry.telescopeFits=telescopeFits;
 			currentEntry.meanQuadPosition=getAveragePosition(quadHits);
+			currentEntry.nHitsPerChip=nHitsPerChip;
+			currentEntry.quadHits=quadHits;
+			currentEntry.matched=matched;
 			outputTree->Fill();
 		}
 
 	}
-	outputTree->Draw("XZ.intercept:x");
+	outputTree->Draw("XZ.intercept+XZ.slope*190:x");
+	new TCanvas();
+	outputTree->Draw("YZ.intercept+YZ.slope*190:z", "fabs(XZ.intercept+XZ.slope*190-x)<3");
 }
 
 void TrackCombiner::printTriggers(int telescopeEntry, int tpcEntry) {
-	const int printEveryN=1;
+	const int printEveryN=1000;
 	if( !(telescopeEntry%printEveryN) ) {
 		cout<<"entry: "<<telescopeEntry<<"/"<<telescopeFitter.nEvents<<" ";
 		cout<<"triggers: "<<telescopeFitter.triggerNumberBegin<<"-"<<telescopeFitter.triggerNumberEnd;
@@ -106,7 +141,7 @@ TrackCombiner::MatchResult TrackCombiner::getAndMatchEntries(
 		int& telescopeEntry,
 		int& tpcStartEntry) {
 
-	std::cout<<"starting getAndMatchEntries( "<<telescopeEntry<<", "<<tpcStartEntry<<")\n";
+//	std::cout<<"starting getAndMatchEntries( "<<telescopeEntry<<", "<<tpcStartEntry<<")\n";
 
 	//use modulus offset instead of doing actual modulus, to continue counting after 32768
 	long long modulusOffset=32768*int((quadFitter.triggerNumber()+triggerOffset)/32768);
@@ -121,10 +156,10 @@ TrackCombiner::MatchResult TrackCombiner::getAndMatchEntries(
 	//then we must get entries until the tpc triggernumber also passes the 32768 boundary ( is larger or equal to new trigger number)
 	if(telescopeFitter.triggerNumberBegin<previousTriggerNumberBegin
 			and not (quadFitter.triggerNumber()+triggerOffset-modulusOffset<500) ) {
-		std::cout<<"telescope number decreased and tpc did not yet, get entries until tpc also passes boundary\n";
+//		std::cout<<"telescope number decreased and tpc did not yet, get entries until tpc also passes boundary\n";
 		do {
 //			printTriggers(telescopeEntry, tpcStartEntry);
-			if( quadFitter.getEntry(tpcStartEntry++) ) return MatchResult::end;
+			if( not quadFitter.getEntry(tpcStartEntry++) ) return MatchResult::end;
 		} while ( quadFitter.triggerNumber()+triggerOffset - modulusOffset - 32768 < telescopeFitter.triggerNumberBegin );
 		modulusOffset=32768*int((quadFitter.triggerNumber()+triggerOffset)/32768);
 		//stop timepix from going back over this boundary
@@ -135,8 +170,8 @@ TrackCombiner::MatchResult TrackCombiner::getAndMatchEntries(
 	//get next entry until tpc trigger number is larger than or equal to begin
 	//or until the tpc trigger number decreases;
 	do {
-		std::cout<<"getting tpc, until tpc trigger entry is larger or equal to begin\n";
-		if( quadFitter.getEntry(tpcStartEntry++) ) {
+//		std::cout<<"getting tpc, until tpc trigger entry is larger or equal to begin\n";
+		if( not quadFitter.getEntry(tpcStartEntry++) ) {
 			std::cout<<"could not get entry "<<tpcStartEntry-1<<"\n";
 			return MatchResult::end;
 		}
@@ -145,7 +180,7 @@ TrackCombiner::MatchResult TrackCombiner::getAndMatchEntries(
 
 	//if also larger than end: reached the end of this telescope frame, continue with next telescope frame;
 	if( (quadFitter.triggerNumber()+triggerOffset-modulusOffset) > telescopeFitter.triggerNumberEnd) {
-		std::cout<<"continuing to next telescope frame\n";
+//		std::cout<<"continuing to next telescope frame\n";
 //		triggerStatusHistogram.Fill("Trigger numbers do not match", 1);
 
 //		frameStatusHistogram.reset();

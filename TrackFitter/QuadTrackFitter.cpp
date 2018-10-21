@@ -12,6 +12,7 @@
 #include "TH1.h"
 #include "TH2.h"
 #include "TTree.h"
+#include "TPolyLine3D.h"
 
 #include "PositionHit.h"
 #include "../Alignment/TimeWalkCorrector.h"
@@ -26,7 +27,7 @@ namespace {
 //	std::array<shift,nChips> chipShifts={{ {24.1,15.7}, {38.0, 26.3}, {23.7,26.3}, {9.9,15.7} }};
 
 
-	std::vector<PositionHit> convertHitsQuad( TTreeReaderValue<std::vector<Hit> >* chips, double driftSpeed) {
+	std::vector<PositionHit> convertHitsQuad( std::vector<Hit>* chips [], double driftSpeed) {
 		std::vector<PositionHit> hits;
 		for(int i=0; i<nChips; i++) {
 			auto chipHits=convertHitsTPC(*chips[i], i, driftSpeed);
@@ -156,12 +157,37 @@ namespace {
 		hitsCounter=0;
 	}
 
+
+	void drawChipFromCorners(std::array<TVector3, 4> corners) {
+		const int npoints=5;
+		double x[npoints] = {};
+		double y[npoints] = {};
+		double z[npoints] = {};
+		for(int i=0; i<npoints; i++) {
+			x[i]=corners[i%4].x();
+			y[i]=corners[i%4].y();
+			z[i]=corners[i%4].z();
+		}
+		TPolyLine3D l( npoints, x, y, z );
+		l.SetLineColor(kAzure-8);
+		l.SetLineWidth(2);
+		l.DrawClone();
+	}
+
+	void drawQuadOutline(const Alignment& align, double z) {
+
+		for(int i=0; i<nChips; i++) {
+			auto corners=align.getChipCorners(i);
+			for(auto& c: corners) c.SetZ( z );
+			drawChipFromCorners(corners);
+		}
+	}
 }
 
 
 
 QuadTrackFitter::QuadTrackFitter(std::string fileName) :
-		tree("data", fileName) {}
+		reader("data", fileName) {}
 
 QuadTrackFitter::~QuadTrackFitter() {
 }
@@ -169,11 +195,11 @@ QuadTrackFitter::~QuadTrackFitter() {
 std::vector<PositionHit> QuadTrackFitter::getSpaceHits(const Alignment& alignment) {
 	//retrieve hits
 	const auto driftSpeed = alignment.driftSpeed.value / 4096 * 25; //in units of mm/ticks
-	posHits = convertHitsQuad(tree.chip, driftSpeed);
+	posHits = convertHitsQuad(reader.chip, driftSpeed);
 	for (auto& h : posHits) {
 		//apply alignment
-		h = alignment.transform(h);
 		h = alignment.timeWalk.correct(h);
+		h = alignment.transform(h);
 		//			if(h.position.z<alignment.hitErrors.z0) h.flag=PositionHit::Flag::smallz;
 		h.error = alignment.hitErrors.hitError(h.position.z);
 		/*
@@ -205,19 +231,15 @@ void QuadTrackFitter::Loop(std::string outputFile,const Alignment& alignment) {
 	std::array<ChipHistogrammer, nChips> hists{"chip1","chip2","chip3","chip4"};
 	ChipHistogrammer quad{"quad"};
 
-	auto nEntries=tree.reader.GetEntries(false);
+	auto nEntries=reader.tree->GetEntries();
 	std::cout<<nEntries<<" entries\n";
-	//tree.reader.SetEntriesRange(0,2E5);
-	tree.reader.Restart();
-	while( tree.reader.Next() ) {
-		if( !(tree.reader.GetCurrentEntry()%10000) ) std::cout<<"entry "<<tree.reader.GetCurrentEntry()<<" / "<<nEntries<<"\n";
+	long long cEntry=0;
+	while( getEntry(cEntry++) ) {
+		if( !(cEntry%10000) ) std::cout<<"entry "<<cEntry<<" / "<<nEntries<<"\n";
 
 		//retrieve hits
 		posHits=getSpaceHits(alignment);
-		nHits=std::vector<int>(4);
-		for(auto& h : posHits) {
-			if(h.flag==PositionHit::Flag::valid) nHits[h.chip]++;
-		}
+		nHits=getHitsPerChip(posHits,true);
 		nHitsPassedTotal=std::accumulate(nHits.begin(), nHits.end(),0);
 
 		if( (nHits[0]>20 and nHits[1]>20) or (nHits[2]>20 and nHits[3]>20) ) {

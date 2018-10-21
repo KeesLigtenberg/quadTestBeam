@@ -8,6 +8,7 @@
 #ifndef RESIDUALHISTOGRAMMER_H_
 #define RESIDUALHISTOGRAMMER_H_
 #include <vector>
+#include <string>
 
 #include "TFile.h"
 #include "TH1.h"
