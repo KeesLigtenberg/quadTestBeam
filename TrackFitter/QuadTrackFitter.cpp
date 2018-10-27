@@ -8,6 +8,7 @@
 #include "QuadTrackFitter.h"
 
 #include <algorithm>
+#include <array>
 
 #include "TH1.h"
 #include "TH2.h"
@@ -61,7 +62,8 @@ namespace {
 	};
 
 	struct ChipHistogrammer {
-		ChipHistogrammer(const char* name) : dirName(name) {
+		ChipHistogrammer(const char* name) : ChipHistogrammer(std::string(name)) {}
+		ChipHistogrammer(std::string name) : dirName(name) {
 			using namespace std;
 
 			//change directory

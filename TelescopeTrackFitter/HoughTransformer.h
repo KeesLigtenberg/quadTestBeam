@@ -5,6 +5,7 @@
 #include <functional>
 #include <memory>
 #include <iostream>
+#include <string>
 
 #include "TStyle.h"
 #include "TTree.h"
@@ -122,13 +123,14 @@ struct HoughTransformer {
 		std::vector< std::vector< std::unique_ptr<HitCluster> > > houghGrid( xbins );
 		for(auto& v : houghGrid) v.resize(ybins);
 
-		constexpr bool DrawHistogram=true;
+		constexpr bool DrawHistogram=false;
 		std::unique_ptr<TH2D> graphicHistogram{
 				DrawHistogram ?
 				new TH2D("graphicHistogram", "Histogram of hough transform;x bin;y bin", xbins,0,xbins, ybins,0,ybins):
 				nullptr };
 		static TCanvas* canv=new TCanvas("houghTelCanv", "Canvas with cluster histogram", 600,400);
-		for( int plane=0; plane<nPlanes; plane++ ) {
+
+		for( unsigned plane=0; plane<hv.size(); plane++ ) {
 			for(auto& h : hv[plane] ) {
 				int binx= (h.position.x-xmin-angleOfTracksX*h.position.z)/(xmax-xmin)*xbins;
 				int biny= (h.position.y-angleOfTracksY*h.position.z)/ymax*ybins;

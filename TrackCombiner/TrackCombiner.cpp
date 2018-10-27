@@ -7,9 +7,17 @@
 
 #include "TrackCombiner.h"
 
+#include <memory>
+
+
 namespace {
 
-
+	PositionHit& calculateResidualTimepix(PositionHit& h, const FitResult3D& telescopeFit ) {
+		h.residual.x=h.position.x - telescopeFit.xAt(h.position.y);
+		h.residual.z=h.position.z - telescopeFit.yAt(h.position.y);
+		h.residual.y=0;
+		return h;
+	}
 
 }
 
@@ -39,6 +47,12 @@ void TrackCombiner::openFile(std::string outputFileName) {
 	outputTree->Branch("nHitsPerChip", "std::vector<int>", &currentEntry.nHitsPerChip);
 	outputTree->Branch("quadHits", "std::vector<PositionHit>", &currentEntry.quadHits);
 	outputTree->Branch("matched", &currentEntry.matched);
+
+	for(int i=0; i<nChips; i++) {
+		hists[i]=std::unique_ptr<ChipHistogrammer>( new ChipHistogrammer("chip"+std::to_string(i)) );
+	}
+	quadHist=std::unique_ptr<ChipHistogrammer>( new ChipHistogrammer("quad") );
+
 }
 
 void TrackCombiner::Process() {
@@ -88,13 +102,33 @@ void TrackCombiner::Process() {
  		for(auto&f : telescopeFits) {
  			if( std::fabs(avPosition.x()-f.xAt(193.25))<2 and std::fabs(avPosition.z()-f.yAt(193.25))<2 ) {
  				matched=true;
-// 				calculateResiduals(quadHits, f);
+ 				for(auto& h : quadHits) {
+ 					h=calculateResidualTimepix(h, f);
+ 				}
  			}
  		}
 // 		if(!matched) continue;
 
 
-		const bool drawEvent=true;
+ 		if(matched) {
+ 			for(auto& h : quadHits) {
+ 				hists[h.chip]->fillTimewalk(h, alignment.timeWalk);
+ 				quadHist->fillTimewalk(h, alignment.timeWalk);
+
+ 				hists[h.chip]->fillHit(h);
+ 				hists[h.chip]->fillRotation(h, alignment.chips[h.chip].COM);
+ 				quadHist->fillHit(h);
+ 				quadHist->fillRotation(h, alignment.quad.COM);
+ 			}
+ 		}
+
+
+		for(auto& h : hists) {
+			h->fillEvent();
+		}
+		quadHist->fillEvent();
+
+		const bool drawEvent=false;
 		if(drawEvent and matched) {
 			//		SimpleDetectorConfiguration setupForDrawing { 0,30 /*x*/, 0,42 /*y beam*/, -20,20/*z drift*/};
 			 		auto setupForDrawing=simpleDetectorFromChipCorners(alignment.getAllChipCorners());

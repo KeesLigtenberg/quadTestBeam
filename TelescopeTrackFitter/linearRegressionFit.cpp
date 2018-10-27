@@ -135,7 +135,8 @@ PositionHit& calculateResidual(PositionHit& h, const FitResult3D& fit ) {
 	return h;
 }
 
-HoughTransformer::HitCluster& calculateResiduals( HoughTransformer::HitCluster& cluster, const FitResult3D& fit)  {
+template<class hitContainer>
+hitContainer& calculateResiduals( hitContainer& cluster, const FitResult3D& fit)  {
 	for(auto& h : cluster) {
 		 calculateResidual(h, fit);
 	}

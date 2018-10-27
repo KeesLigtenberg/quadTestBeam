@@ -11,6 +11,7 @@
 #include "../TelescopeTrackFitter/TelescopeTrackFitter.cpp"
 #include "../TrackFitter/QuadTrackFitter.cpp"
 
+
 class TrackCombiner {
 public:
 	TrackCombiner(std::string quadFile, std::string telescopeFile, Alignment& alignment);
@@ -29,6 +30,9 @@ public:
 private:
 	std::unique_ptr<TFile> outputFile{nullptr};
 	std::unique_ptr<TTree> outputTree{nullptr};
+	std::array< std::unique_ptr<ChipHistogrammer>, nChips> hists{};
+	std::unique_ptr<ChipHistogrammer> quadHist{nullptr};
+
 
 	struct TreeEntry {
 		std::vector<FitResult3D> telescopeFits;

@@ -89,7 +89,8 @@ FitResult3D makeLinesParallelToZ(double x, double y) {
 //TrackFitResult linearRegressionTrackFit(const HoughTransformer::HitCluster& cluster);
 
 PositionHit& calculateResidual( PositionHit& h, const FitResult3D& fit );
-HoughTransformer::HitCluster& calculateResiduals( HoughTransformer::HitCluster& cluster, const FitResult3D& fit);
+template <class HitContainer>
+HitContainer& calculateResiduals( HitContainer& cluster, const FitResult3D& fit);
 TVector3 averageResidual(const HoughTransformer::HitCluster& cluster);
 
 HoughTransformer::HitCluster& cutOnResiduals( HoughTransformer::HitCluster& cluster, double maxResidual );

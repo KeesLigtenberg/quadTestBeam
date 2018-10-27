@@ -8,6 +8,8 @@
 #ifndef LASERDATAFITTER_ALIGNMENT_H_
 #define LASERDATAFITTER_ALIGNMENT_H_
 
+#include <array>
+
 #include "TGraph.h"
 #include "TH1.h"
 #include "TFitResult.h"
