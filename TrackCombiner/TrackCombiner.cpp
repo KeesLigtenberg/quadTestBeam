@@ -64,7 +64,7 @@ void TrackCombiner::Process() {
 
 
 	for(int telescopeEntryNumber=0,tpcEntryNumber=0; //5000000, 2308829
-			telescopeEntryNumber<telescopeFitter.nEvents//1000000
+			telescopeEntryNumber<1E5 //telescopeFitter.nEvents//1000000
 			;) {
 //		triggerStatusHistogram.reset();
 
@@ -129,10 +129,10 @@ void TrackCombiner::Process() {
 		quadHist->fillEvent();
 
 		const bool drawEvent=false;
-		if(drawEvent and matched) {
+		if(drawEvent) {
 			//		SimpleDetectorConfiguration setupForDrawing { 0,30 /*x*/, 0,42 /*y beam*/, -20,20/*z drift*/};
-			 		auto setupForDrawing=simpleDetectorFromChipCorners(alignment.getAllChipCorners());
-			 		setupForDrawing.minz=-10, setupForDrawing.maxz=30;
+			auto setupForDrawing=simpleDetectorFromChipCorners(alignment.getAllChipCorners());
+			setupForDrawing.minz=-10, setupForDrawing.maxz=30;
 			//		SimpleDetectorConfiguration setupForDrawing { 10,40 /*x*/, 0,400 /*y beam*/, 0,40/*z drift*/};
 
 			std::cout<<"draw telescope hits\n";
@@ -157,9 +157,9 @@ void TrackCombiner::Process() {
 		}
 
 	}
-	outputTree->Draw("XZ.intercept+XZ.slope*190:x");
+	outputTree->Draw("XZ.intercept+XZ.slope*172:x");
 	new TCanvas();
-	outputTree->Draw("YZ.intercept+YZ.slope*190:z", "fabs(XZ.intercept+XZ.slope*190-x)<3");
+	outputTree->Draw("YZ.intercept+YZ.slope*172:z", "fabs(XZ.intercept+XZ.slope*172-x)<3");
 }
 
 void TrackCombiner::printTriggers(int telescopeEntry, int tpcEntry) {

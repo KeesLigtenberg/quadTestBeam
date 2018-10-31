@@ -53,7 +53,7 @@ public:
 	void drawEvent(const std::vector<std::vector<PositionHit> >& spaceHit,
 			const std::vector<FitResult3D>& fits);
 
-	bool displayEvent=false;
+	bool displayEvent=true;
 	bool makeTrackHistograms=false;
 	bool recalculateCOM=true; //centre of mass
 	bool constructLineParallelToZ=false;

@@ -46,7 +46,7 @@ struct QuadTreeReader {
 	std::vector<Hit>* chip[4]{};
 };
 
-
+struct ChipHistogrammer;
 
 class QuadTrackFitter {
 public:

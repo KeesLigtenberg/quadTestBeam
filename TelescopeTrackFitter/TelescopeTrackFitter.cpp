@@ -34,7 +34,7 @@ using namespace std;
 
 TelescopeTrackFitter::TelescopeTrackFitter(std::string inputfile, const TelescopeConfiguration& detector) :
 	detector(detector),
-	houghTransform(detector.xmin(), detector.xmax(), detector.ymin(), detector.ymax(), 15/*xbins*/, 12 /*ybins*/ ),
+	houghTransform(detector.xmin(), detector.xmax(), detector.ymin(), detector.ymax(), 200/*xbins*/, 500 /*ybins*/ ),
 	residualHistograms(nullptr),
 	hitsCentre(detector.nPlanes, detector.getCentre() ), //initialise to regular centre of sensor
 	averageResidualFromSum(detector.nPlanes, {0,0} ), //initialise to zero
@@ -186,6 +186,11 @@ void TelescopeTrackFitter::fitTracks(std::string outputfilename) {
 		if( !passEvent(spaceHit) ) continue;
 		if(not nPassed) std::cout<<"first entry with hits at "<<iEvent<<"\n";
 		++nPassed;
+
+		if(displayEvent) {
+			drawEvent(spaceHit, {} ) ;
+			if( processDrawSignals() ) break; //returns true if stopped
+		}
 
 		//sum x and y here to sum all hits including noise
 

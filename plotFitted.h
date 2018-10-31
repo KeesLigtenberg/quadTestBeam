@@ -8,11 +8,17 @@
 #include "TTreeReader.h"
 #include "TTreeReaderArray.h"
 
-#include "/user/cligtenb/rootmacros/getObjectFromFile.h"
-#include "/user/cligtenb/rootmacros/getHistFromTree.h"
-#include "/user/cligtenb/rootmacros/AllCombiner.h"
-#include "/user/cligtenb/rootmacros/histogramOperations.h"
-#include "/user/cligtenb/rootmacros/StatsWrapper.h"
+//#include "/user/cligtenb/rootmacros/getObjectFromFile.h"
+//#include "/user/cligtenb/rootmacros/getHistFromTree.h"
+//#include "/user/cligtenb/rootmacros/AllCombiner.h"
+//#include "/user/cligtenb/rootmacros/histogramOperations.h"
+//#include "/user/cligtenb/rootmacros/StatsWrapper.h"
+
+#include "../rootmacros/getObjectFromFile.h"
+#include "../rootmacros/getHistFromTree.h"
+#include "../rootmacros/AllCombiner.h"
+#include "../rootmacros/histogramOperations.h"
+#include "../rootmacros/StatsWrapper.h"
 
 
 #include "Alignment/Alignment.h"
@@ -474,6 +480,15 @@ void testTransformBackFunction() {
 				cout<<align.transformBack( {hitpositionx[i], hitpositiony[i], 0} )<<"\n";
 		}
 	}
+
+}
+
+void plotCorrelations( std::string combinedFileName="combinedFit.root") {
+	auto fitResults=getObjectFromFile<TTree>("fitResults", combinedFileName);
+	new TCanvas();
+	fitResults->Draw("XZ.intercept+XZ.slope*172:x");
+	new TCanvas();
+	fitResults->Draw("YZ.intercept+YZ.slope*172:z", "fabs(XZ.intercept+XZ.slope*172-x)<3");
 
 }
 

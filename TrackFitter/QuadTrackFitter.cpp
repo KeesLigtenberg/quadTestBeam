@@ -61,104 +61,6 @@ namespace {
 		}
 	};
 
-	struct ChipHistogrammer {
-		ChipHistogrammer(const char* name) : ChipHistogrammer(std::string(name)) {}
-		ChipHistogrammer(std::string name) : dirName(name) {
-			using namespace std;
-
-			//change directory
-			auto startDir=gDirectory;
-			gDirectory->mkdir( dirName.c_str() )->cd();
-
-			nHits=		unique_ptr<TH1I>(new TH1I{"nHits", "Number of hits per event;Number of hits;Entries", 100,0,100});
-			constexpr double ToABinWidth=1.5625E-3;
-			driftTime=unique_ptr<TH1D>(new TH1D{"driftTime","Drift time;Drift time [#mus];Hits", int(0.8/ToABinWidth),-0.39999,0.4}); //zero would be rounded up (wrong), so move bin slightly to 0.099999
-			ToT=			unique_ptr<TH1D>(new TH1D{"ToT", "Time over threshold;ToT [#mus];Hits",80,0,2});
-			zHit=			unique_ptr<TH1D>(new TH1D{"zHit", "z-position of hits;z [mm]; Hits", 200,-10,40 });
-
-			xResidual=unique_ptr<TH1D>(new TH1D{"xResidual", "x-residual;x-residual [mm]; Hits", 80,-2,2});
-			yResidual=unique_ptr<TH1D>(new TH1D{"yResidual", "y-residual;y-residual [mm]; Hits", 80,-2,2});
-			zResidual=unique_ptr<TH1D>(new TH1D{"zResidual", "z-residual;z-residual [mm]; Hits", 80,-4,4});
-
-			pixelHitMap=unique_ptr<TH2D>(new TH2D{"pixelHitMap", "Hitmap by pixel;Columns;Rows", 256,0, 256, 256,0,256});
-			positionHitMap=unique_ptr<TH2D>(new TH2D{"positionHitMap", "Hitmap with positions;x-position [mm];y-position [mm]",int(30/.055),11,41,int(40/.055),1,41});
-
-			xRotation=unique_ptr<TH1D>(new TH1D{"xRotation", "x-rotation;x-rotation [rad.]; Hits", 100,-0.5,0.5});
-			yRotation=unique_ptr<TH1D>(new TH1D{"yRotation", "y-rotation;y-rotation [rad.]; Hits", 100,-0.5,0.5});
-			zRotation=unique_ptr<TH1D>(new TH1D{"zRotation", "z-rotation;z-rotation [rad.]; Hits", 100,-1,1});
-
-		  zResidualByToT=std::unique_ptr<TH2D>(new TH2D{"zResidualByToT", "z-residual by ToT;ToT [#mus]; z-residual [mm]", 100,0,2.5, 200,-5,5});
-		  zResidualByToTCorrected=std::unique_ptr<TH2D>(new TH2D{"zResidualByToTCorrected", "z-residual by ToT;ToT [#mus]; z-residual [mm]", 100,0,2.5, 200,-5,5});
-
-		  xResidualByz=std::unique_ptr<TH2D>(new TH2D{"xResidualByz", "x-residuals as a function of drift distance;Drift distance [mm];x-residual [mm]", 26,-1,25,25,-2,2});
-		  yResidualByz=std::unique_ptr<TH2D>(new TH2D{"yResidualByz", "y-residuals as a function of drift distance;Drift distance [mm];y-residual [mm]", 26,-1,25,25,-2,2});
-		  zResidualByz=std::unique_ptr<TH2D>(new TH2D{"zResidualByz", "z-residuals as a function of drift distance;Drift distance [mm];z-residual [mm]", 26,-1,25,50,-2,2});
-
-			startDir->cd();
-		}
-
-		std::unique_ptr<TH1I> nHits;
-		std::unique_ptr<TH1D> driftTime, ToT, zHit;
-		std::unique_ptr<TH1D> xResidual, yResidual, zResidual;
-		std::unique_ptr<TH2D> pixelHitMap, positionHitMap;
-		std::unique_ptr<TH1D> xRotation, yRotation, zRotation;
-		std::unique_ptr<TH2D> zResidualByToT, zResidualByToTCorrected;
-		std::unique_ptr<TH2D> xResidualByz, yResidualByz,zResidualByz;
-
-		void fillHit(const PositionHit& h);
-		void fillRotation(const PositionHit& h, const TVector3& COM);
-		void fillEvent();
-		void fillTimewalk(const PositionHit& h, const TimeWalkCorrector& twc) {
-			zResidualByToT->Fill(h.ToT*25E-3, h.residual.z+twc.getCorrection(h.ToT));
-		}
-	private:
-		std::string dirName;
-		int hitsCounter=0;
-	};
-
-
-
-
-	void ChipHistogrammer::fillHit(const PositionHit& h) {
-		driftTime->Fill(h.driftTime/4096.*25E-3);
-		ToT->Fill(h.ToT*25E-3);
-		zHit->Fill(h.position.z);
-		xResidual->Fill(h.residual.x);
-		yResidual->Fill(h.residual.y);
-		zResidual->Fill(h.residual.z);
-		pixelHitMap->Fill(h.column, h.row);
-		positionHitMap->Fill(h.position.x, h.position.y);
-		zResidualByToTCorrected->Fill(h.ToT*25E-3, h.residual.z);
-		xResidualByz->Fill(h.position.z,h.residual.x);
-		yResidualByz->Fill(h.position.z,h.residual.y);
-		zResidualByz->Fill(h.position.z,h.residual.z);
-		hitsCounter++;
-	}
-
-	void ChipHistogrammer::fillRotation(const PositionHit& h, const TVector3& COM) {
-		//todo: do proper 3d rotation alignment
-		auto d=h.position-COM;
-		//x
-		double perp2x=d.Perp2({1,0,0});
-		double phix=(d.z()*h.residual.y-d.y()*h.residual.z)/perp2x;
-		xRotation->Fill(phix, perp2x);
-
-		//y
-		double perp2y=d.Perp2({0,1,0});
-		double phiy=(d.x()*h.residual.z-d.z()*h.residual.x)/perp2y;
-		yRotation->Fill(phiy, perp2y);
-
-		//z
-		double phi=(d.y()*h.residual.x-d.x()*h.residual.y)/d.Perp2();
-		double weight=d.Perp2();
-		zRotation->Fill(phi,weight);
-	}
-	void ChipHistogrammer::fillEvent() {
-		if(!hitsCounter) return;
-		nHits->Fill(hitsCounter);
-		hitsCounter=0;
-	}
-
 
 	void drawChipFromCorners(std::array<TVector3, 4> corners) {
 		const int npoints=5;
@@ -186,6 +88,103 @@ namespace {
 	}
 }
 
+struct ChipHistogrammer {
+	ChipHistogrammer(const char* name) : ChipHistogrammer(std::string(name)) {}
+	ChipHistogrammer(std::string name) ;
+
+	std::unique_ptr<TH1I> nHits;
+	std::unique_ptr<TH1D> driftTime, ToT, zHit;
+	std::unique_ptr<TH1D> xResidual, yResidual, zResidual;
+	std::unique_ptr<TH2D> pixelHitMap, positionHitMap;
+	std::unique_ptr<TH1D> xRotation, yRotation, zRotation;
+	std::unique_ptr<TH2D> zResidualByToT, zResidualByToTCorrected;
+	std::unique_ptr<TH2D> xResidualByz, yResidualByz,zResidualByz;
+
+	void fillHit(const PositionHit& h);
+	void fillRotation(const PositionHit& h, const TVector3& COM);
+	void fillEvent();
+	void fillTimewalk(const PositionHit& h, const TimeWalkCorrector& twc) {
+		zResidualByToT->Fill(h.ToT*25E-3, h.residual.z+twc.getCorrection(h.ToT));
+	}
+private:
+	std::string dirName;
+	int hitsCounter=0;
+};
+
+ChipHistogrammer::ChipHistogrammer(std::string name) : dirName(name) {
+	using namespace std;
+
+	//change directory
+	auto startDir=gDirectory;
+	gDirectory->mkdir( dirName.c_str() )->cd();
+
+	nHits=		unique_ptr<TH1I>(new TH1I{"nHits", "Number of hits per event;Number of hits;Entries", 100,0,200});
+	constexpr double ToABinWidth=1.5625E-3;
+	driftTime=unique_ptr<TH1D>(new TH1D{"driftTime","Drift time;Drift time [#mus];Hits", int(0.8/ToABinWidth),-0.39999,0.4}); //zero would be rounded up (wrong), so move bin slightly to 0.099999
+	ToT=			unique_ptr<TH1D>(new TH1D{"ToT", "Time over threshold;ToT [#mus];Hits",80,0,2});
+	zHit=			unique_ptr<TH1D>(new TH1D{"zHit", "z-position of hits;z [mm]; Hits", 200,-10,40 });
+
+	xResidual=unique_ptr<TH1D>(new TH1D{"xResidual", "x-residual;x-residual [mm]; Hits", 80,-2,2});
+	yResidual=unique_ptr<TH1D>(new TH1D{"yResidual", "y-residual;y-residual [mm]; Hits", 80,-2,2});
+	zResidual=unique_ptr<TH1D>(new TH1D{"zResidual", "z-residual;z-residual [mm]; Hits", 80,-4,4});
+
+	pixelHitMap=unique_ptr<TH2D>(new TH2D{"pixelHitMap", "Hitmap by pixel;Columns;Rows", 256,0, 256, 256,0,256});
+	positionHitMap=unique_ptr<TH2D>(new TH2D{"positionHitMap", "Hitmap with positions;x-position [mm];y-position [mm]",int(30/.055),-3,27,int(40/.055),153,193});
+
+	xRotation=unique_ptr<TH1D>(new TH1D{"xRotation", "x-rotation;x-rotation [rad.]; Hits", 100,-0.5,0.5});
+	yRotation=unique_ptr<TH1D>(new TH1D{"yRotation", "y-rotation;y-rotation [rad.]; Hits", 100,-0.5,0.5});
+	zRotation=unique_ptr<TH1D>(new TH1D{"zRotation", "z-rotation;z-rotation [rad.]; Hits", 100,-1,1});
+
+	zResidualByToT=std::unique_ptr<TH2D>(new TH2D{"zResidualByToT", "z-residual by ToT;ToT [#mus]; z-residual [mm]", 100,0,2.5, 200,-5,5});
+	zResidualByToTCorrected=std::unique_ptr<TH2D>(new TH2D{"zResidualByToTCorrected", "z-residual by ToT;ToT [#mus]; z-residual [mm]", 100,0,2.5, 200,-5,5});
+
+	xResidualByz=std::unique_ptr<TH2D>(new TH2D{"xResidualByz", "x-residuals as a function of drift distance;Drift distance [mm];x-residual [mm]", 26,-1,25,25,-2,2});
+	yResidualByz=std::unique_ptr<TH2D>(new TH2D{"yResidualByz", "y-residuals as a function of drift distance;Drift distance [mm];y-residual [mm]", 26,-1,25,25,-2,2});
+	zResidualByz=std::unique_ptr<TH2D>(new TH2D{"zResidualByz", "z-residuals as a function of drift distance;Drift distance [mm];z-residual [mm]", 26,-1,25,50,-2,2});
+
+	startDir->cd();
+}
+
+
+void ChipHistogrammer::fillHit(const PositionHit& h) {
+	driftTime->Fill(h.driftTime/4096.*25E-3);
+	ToT->Fill(h.ToT*25E-3);
+	zHit->Fill(h.position.z);
+	xResidual->Fill(h.residual.x);
+	yResidual->Fill(h.residual.y);
+	zResidual->Fill(h.residual.z);
+	pixelHitMap->Fill(h.column, h.row);
+	positionHitMap->Fill(h.position.x, h.position.y);
+	zResidualByToTCorrected->Fill(h.ToT*25E-3, h.residual.z);
+	xResidualByz->Fill(h.position.z,h.residual.x);
+	yResidualByz->Fill(h.position.z,h.residual.y);
+	zResidualByz->Fill(h.position.z,h.residual.z);
+	hitsCounter++;
+}
+
+void ChipHistogrammer::fillRotation(const PositionHit& h, const TVector3& COM) {
+	//todo: do proper 3d rotation alignment
+	auto d=h.position-COM;
+	//x
+	double perp2x=d.Perp2({1,0,0});
+	double phix=(d.z()*h.residual.y-d.y()*h.residual.z)/perp2x;
+	xRotation->Fill(phix, perp2x);
+
+	//y
+	double perp2y=d.Perp2({0,1,0});
+	double phiy=(d.x()*h.residual.z-d.z()*h.residual.x)/perp2y;
+	yRotation->Fill(phiy, perp2y);
+
+	//z
+	double phi=(d.y()*h.residual.x-d.x()*h.residual.y)/d.Perp2();
+	double weight=d.Perp2();
+	zRotation->Fill(phi,weight);
+}
+void ChipHistogrammer::fillEvent() {
+	if(!hitsCounter) return;
+	nHits->Fill(hitsCounter);
+	hitsCounter=0;
+}
 
 
 QuadTrackFitter::QuadTrackFitter(std::string fileName) :
@@ -244,10 +243,10 @@ void QuadTrackFitter::Loop(std::string outputFile,const Alignment& alignment) {
 		nHits=getHitsPerChip(posHits,true);
 		nHitsPassedTotal=std::accumulate(nHits.begin(), nHits.end(),0);
 
-		if( (nHits[0]>20 and nHits[1]>20) or (nHits[2]>20 and nHits[3]>20) ) {
-		} else {
-			continue;
-		}
+//		if( (nHits[0]>10 and nHits[1]>10) or (nHits[2]>10 and nHits[3]>10) ) {
+//		} else {
+//			continue;
+//		}
 
 		averageHitPosition={0,0,0};
 		for(auto& h : posHits) {
@@ -275,9 +274,11 @@ void QuadTrackFitter::Loop(std::string outputFile,const Alignment& alignment) {
 
 		fitResults.Fill();
 
-		bool draw=true;
+		bool draw=false;
 		if(draw) {
-			SimpleDetectorConfiguration setupForDrawing { 10,40 /*x*/, 0,42 /*y beam*/, -10,40/*z drift*/};
+//			SimpleDetectorConfiguration setupForDrawing { 10,40 /*x*/, 0,42 /*y beam*/, -10,40/*z drift*/};
+			auto setupForDrawing=simpleDetectorFromChipCorners(alignment.getAllChipCorners());
+			setupForDrawing.minz=-10, setupForDrawing.maxz=30;
 			HoughTransformer::drawCluster(posHits,setupForDrawing);
 			if(processDrawSignals()) break;
 		}

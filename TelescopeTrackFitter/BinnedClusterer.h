@@ -119,81 +119,81 @@ struct HoughTransformer {
 	//vector of vectors, this means multiple planes
 	virtual std::list<HitCluster> operator() ( const std::vector< std::vector<PositionHit> >& hv  ) {
 
-		//list of pointers to all hits
-		std::list<const PositionHit*> hitList;
-		for(auto& v: hv) {
-			for(auto& h: v) {
-				hitList.push_back(&h);
+		//construct grid
+		std::vector< std::vector< std::unique_ptr<HitCluster> > > houghGrid( xbins );
+		for(auto& v : houghGrid) v.resize(ybins);
+
+		constexpr bool DrawHistogram=false;
+		std::unique_ptr<TH2D> graphicHistogram{
+				DrawHistogram ?
+				new TH2D("graphicHistogram", "Histogram of hough transform;x bin;y bin", xbins,0,xbins, ybins,0,ybins):
+				nullptr };
+		static TCanvas* canv=new TCanvas("houghTelCanv", "Canvas with cluster histogram", 600,400);
+
+		for( unsigned plane=0; plane<hv.size(); plane++ ) {
+			for(auto& h : hv[plane] ) {
+				int binx= (h.position.x-xmin-angleOfTracksX*h.position.z)/(xmax-xmin)*xbins;
+				int biny= (h.position.y-angleOfTracksY*h.position.z)/ymax*ybins;
+				if( binx>=xbins ) binx=xbins-1;
+				if( biny>=ybins ) biny=ybins-1;
+				if( binx<0 ) binx=0;
+				if( biny<0 ) biny=0;
+
+				if(!houghGrid.at(binx).at(biny)) houghGrid.at(binx).at(biny)=std::unique_ptr<HitCluster>( new HitCluster() );
+				houghGrid.at(binx).at(biny)->add(h, plane);
+
+				if(DrawHistogram) graphicHistogram->Fill(binx,biny);
 			}
 		}
 
+		//draw histogram
+		if(DrawHistogram) {
+			std::cout<<"drawing histogram of hough transform!"<<std::endl;
+			canv->cd();
+			gStyle->SetOptTitle(0);
+			gStyle->SetOptStat("e");
+			graphicHistogram->Draw("colz");
+			changeStat(*graphicHistogram);
+			canv->SetTicks(1,1);
+			char c=std::cin.get();
+			if(c=='w') {gPad->Print("telescopeCluster.pdf");}
+			if(c=='q') { throw graphicHistogram;} //abuse of throw mechanism
+		}
 
-		std::list<HitCluster> foundClusters;
-		while(int(hitList.size())>minClusterSize) {
-
-			//construct grid
-			std::vector< std::vector< std::list<const PositionHit*> > > houghGrid( xbins+1 );
-			for(auto& v : houghGrid) v.resize(ybins+1);
-
-			constexpr bool DrawHistogram=false;
-			std::unique_ptr<TH2D> graphicHistogram{
-					DrawHistogram ?
-					new TH2D("graphicHistogram", "Histogram of hough transform;x bin;y bin", xbins,0,xbins, ybins,0,ybins):
-					nullptr };
-			static TCanvas* canv=new TCanvas("houghTelCanv", "Canvas with cluster histogram", 600,400);
-
-			for(auto& h : hitList ) {
-				double angleRange=0.02;
-				for(int binx=0; binx<=xbins; binx++) {
-					double angle=angleOfTracksX-angleRange/2.+binx*angleRange/xbins;
-					double r=h->position.x*cos(angle) + h->position.z*sin(angle);
-					double rmin=0, rmax=20;
-					int biny=(r-rmin)/(rmax-rmin)*ybins;
-
-//					std::cout<<"fill r="<<r<<" and angle="<<angle<<"at bin "<<binx<<", "<<biny<<"\n";
-					if(biny>=0 and biny<=ybins) houghGrid.at(binx).at(biny).push_back(h);
-
-					if(DrawHistogram) graphicHistogram->Fill(binx,biny);
-				}
-			}
-
-			//draw histogram
-			if(DrawHistogram) {
-				std::cout<<"drawing histogram of hough transform!"<<std::endl;
-				canv->cd();
-				gStyle->SetOptTitle(0);
-				gStyle->SetOptStat("e");
-				graphicHistogram->Draw("colz");
-				changeStat(*graphicHistogram);
-				canv->SetTicks(1,1);
-				char c=std::cin.get();
-				if(c=='w') {gPad->Print("telescopeCluster.pdf");}
-				if(c=='q') { throw graphicHistogram;} //abuse of throw mechanism
-			}
-
-			//find largest cluster
-			int maxBinEntries=0;
-			int maxBinx=0, maxBiny=0;
-			for(int col=0; col<=xbins; col++) {
-				for(int row=0; row<=ybins; row++) {
-					if(int(houghGrid[col][row].size()) > maxBinEntries) {
-						maxBinEntries=houghGrid[col][row].size();
-						maxBinx=col; maxBiny=row;
+		//get grid positions and sort by size
+		std::list< std::tuple<int, int, int> > gridPositions;
+		for(int i=0; i<xbins; i++) {
+			for(int j=0; j<ybins; j++) {
+				if(houghGrid.at(i).at(j)) {
+					int size=houghGrid.at(i).at(j)->clusterSize;
+					if(size >= minCandidateSize) {
+						gridPositions.emplace_back(size, i, j);
 					}
 				}
 			}
+		}
+		gridPositions.sort();
 
+		//merge neighbouring bins, starting with largest
+		std::list<HitCluster> foundClusters;
+		for(auto it=gridPositions.rbegin();	it!=gridPositions.rend(); it++) {
+			int size, i, j;
+			std::tie(size,i,j)=*it;
 
-			if(maxBinEntries<minClusterSize) break;
+			if(!houghGrid.at(i).at(j)) continue;
+			auto& currentCluster= *houghGrid.at(i).at(j);
+			if(!currentCluster.clusterSize) continue;
 
-			//make houghcluster from largest
-			HitCluster hc;
-			for(auto hp : houghGrid[maxBinx][maxBiny]) {
-				hc.add(*hp);
-				hitList.remove(hp);
+			for(int dx=-1; dx<=1; dx++) for(int dy=-1; dy<=1; dy++) {
+				if(i+dx<0 or i+dx >= xbins or j+dy<0 or j+dy >= ybins or (!dx and !dy) ) continue; //outside grid
+				if(! houghGrid.at(i+dx).at(j+dy) ) continue; //no hits in bin
+				currentCluster.mergeWith( *houghGrid.at(i+dx).at(j+dy) );
 			}
-			foundClusters.push_back(hc);
 
+			if(currentCluster.clusterSize >= minClusterSize) {
+				foundClusters.push_back( std::move(currentCluster) );
+			}
+			houghGrid.at(i).at(j).reset(nullptr);
 		}
 
 		return foundClusters;
@@ -319,7 +319,7 @@ inline void HoughTransformer::drawClusters(const T& clusters, const DetectorConf
 
 
 	gPad->Update();
-	double theta=-20 /*70*/,phi=60;
+	double theta=70 /*70*/,phi=60;
 //	std::cout<<"give angles!"<<std::endl;
 //	std::cin>>theta>>phi;
 	gPad->GetView()->RotateView(theta, phi);
@@ -397,7 +397,7 @@ inline void HoughTransformer::drawCluster(const T& cluster, const DetectorConfig
 	paletteAxisLabel->SetTextAlign(kHAlignCenter+kVAlignCenter);
 	paletteAxisLabel->Draw();
 
-	double theta=-20 /*-20*/,phi=10 /*60*/;
+	double theta=70 /*-20*/,phi=60 /*60*/;
 	//	std::cout<<"give angles!"<<std::endl;
 	//	std::cin>>theta>>phi;
 	gPad->GetView()->RotateView(theta, phi);
