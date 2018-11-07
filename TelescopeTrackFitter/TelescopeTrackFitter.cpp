@@ -24,8 +24,8 @@
 
 #include "../Alignment/Alignment.h"
 #include "DetectorConfiguration.h"
-//#include "/user/cligtenb/rootmacros/getObjectFromFile.h"
-#include "../../rootmacros/getObjectFromFile.h"
+#include "/user/cligtenb/rootmacros/getObjectFromFile.h"
+//#include "../../rootmacros/getObjectFromFile.h"
 #include "ResidualHistogrammer.h"
 #include "transformHits.h"
 #include "makeNoisyPixelMask.cpp"
@@ -35,6 +35,7 @@ using namespace std;
 TelescopeTrackFitter::TelescopeTrackFitter(std::string inputfile, const TelescopeConfiguration& detector) :
 	detector(detector),
 	houghTransform(detector.xmin(), detector.xmax(), detector.ymin(), detector.ymax(), 200/*xbins*/, 500 /*ybins*/ ),
+	binnedClustering(detector.xmin(), detector.xmax(), detector.ymin(), detector.ymax(),10,5),
 	residualHistograms(nullptr),
 	hitsCentre(detector.nPlanes, detector.getCentre() ), //initialise to regular centre of sensor
 	averageResidualFromSum(detector.nPlanes, {0,0} ), //initialise to zero
@@ -72,6 +73,7 @@ int TelescopeTrackFitter::makeMask(double ntimesThreshold) {
 }
 
 bool TelescopeTrackFitter::passEvent(const std::vector<std::vector<PositionHit> >& spaceHit) const {
+//	if(triggerNumberBegin==triggerNumberEnd) return false;
 	bool planeIsHit[6]={0};
 	int nPlanesHit=0;
 	int nTotalHits=0;
@@ -169,7 +171,7 @@ void TelescopeTrackFitter::fitTracks(std::string outputfilename) {
 
 	//loop over all entries
 	long int nPassed=0,nClusters=0;
-	for( int iEvent=0; iEvent<1E6 /*nEvents*/; iEvent++ ) {
+	for( int iEvent=0; iEvent<1E5 /*nEvents*/; iEvent++ ) {
 
 		if(!(iEvent%10000))
 			std::cout<<"event "<<iEvent<<"/"<<nEvents<<"\r"<<std::flush;
@@ -195,7 +197,7 @@ void TelescopeTrackFitter::fitTracks(std::string outputfilename) {
 		//sum x and y here to sum all hits including noise
 
 		//hough transform
-		auto houghClusters = houghTransform(spaceHit);
+		auto houghClusters = doBinnedClustering ? binnedClustering(spaceHit) : houghTransform(spaceHit);
 
 		//require at least nmin planes to be hit
 		const int nMinPlanesHit=4;

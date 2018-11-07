@@ -8,17 +8,17 @@
 #include "TTreeReader.h"
 #include "TTreeReaderArray.h"
 
-//#include "/user/cligtenb/rootmacros/getObjectFromFile.h"
-//#include "/user/cligtenb/rootmacros/getHistFromTree.h"
-//#include "/user/cligtenb/rootmacros/AllCombiner.h"
-//#include "/user/cligtenb/rootmacros/histogramOperations.h"
-//#include "/user/cligtenb/rootmacros/StatsWrapper.h"
+#include "/user/cligtenb/rootmacros/getObjectFromFile.h"
+#include "/user/cligtenb/rootmacros/getHistFromTree.h"
+#include "/user/cligtenb/rootmacros/AllCombiner.h"
+#include "/user/cligtenb/rootmacros/histogramOperations.h"
+#include "/user/cligtenb/rootmacros/StatsWrapper.h"
 
-#include "../rootmacros/getObjectFromFile.h"
-#include "../rootmacros/getHistFromTree.h"
-#include "../rootmacros/AllCombiner.h"
-#include "../rootmacros/histogramOperations.h"
-#include "../rootmacros/StatsWrapper.h"
+//#include "../rootmacros/getObjectFromFile.h"
+//#include "../rootmacros/getHistFromTree.h"
+//#include "../rootmacros/AllCombiner.h"
+//#include "../rootmacros/histogramOperations.h"
+//#include "../rootmacros/StatsWrapper.h"
 
 
 #include "Alignment/Alignment.h"

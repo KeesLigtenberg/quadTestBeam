@@ -5,8 +5,8 @@
 #include "TGraph.h"
 #include "TH1.h"
 
-#include "../../rootmacros/AllCombiner.h"
-//#include "/user/cligtenb/rootmacros/AllCombiner.h"
+//#include "../../rootmacros/AllCombiner.h"
+#include "/user/cligtenb/rootmacros/AllCombiner.h"
 
 #include "DetectorConfiguration.h"
 #include "TelescopeTrackFitter.h"
@@ -51,6 +51,7 @@ void FitTracks (std::string inputfile, int nRepeatFit=6) {
 
 	telescopeFitter.makeMask(5e3);
 //	telescopeFitter.setShifts( { {0,0}, {0,0}, {0,0}, {0,4}, {0,4}, {0,4} } );
+//	telescopeFitter.doBinnedClustering=true;
 
 	//initialise alignment parameters
 	double recursion[nRepeatFit],
@@ -59,6 +60,12 @@ void FitTracks (std::string inputfile, int nRepeatFit=6) {
 		rotation[mimosa.nPlanes][nRepeatFit];
 
 	const int firstRefPlane=1, secondRefPlane=4;
+
+	{
+//		telescopeFitter.setShifts({{0,0}, {0,0}, {0,0}, {0,-1}, {0,-1}, {0,-1} });
+		telescopeFitter.setAlignment(Alignment("align.dat"));
+
+	}
 
 
 	for(int i=0; i<nRepeatFit; i++) {
@@ -98,6 +105,11 @@ void FitTracks (std::string inputfile, int nRepeatFit=6) {
 				case 3:
 					telescopeFitter.setSlopes( telescopeFitter.getSlopes() );
 					telescopeFitter.maxResidual=0.05;
+					break;
+				case 4:
+					telescopeFitter.addToShifts( means );
+					telescopeFitter.addToAngles( rotations );
+					telescopeFitter.doBinnedClustering=false;
 					break;
 				default:
 					telescopeFitter.addToShifts( means );

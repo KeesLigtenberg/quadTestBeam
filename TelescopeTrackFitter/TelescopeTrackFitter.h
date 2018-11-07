@@ -17,6 +17,7 @@
 
 #include "../eventBuilder/Hit.h"
 #include "HoughTransformer.h"
+#include "BinnedClusterer.h"
 #include "../TrackFitter/PositionHit.h"
 #include "makeNoisyPixelMask.h"
 #include "linearRegressionFit.cpp"
@@ -53,10 +54,11 @@ public:
 	void drawEvent(const std::vector<std::vector<PositionHit> >& spaceHit,
 			const std::vector<FitResult3D>& fits);
 
-	bool displayEvent=true;
+	bool displayEvent=false;
 	bool makeTrackHistograms=false;
 	bool recalculateCOM=true; //centre of mass
 	bool constructLineParallelToZ=false;
+	bool doBinnedClustering=false;
 
 	double maxResidual=0.2;
 
@@ -77,6 +79,7 @@ private:
 
 	const TelescopeConfiguration& detector;
 	HoughTransformer houghTransform;
+	BinnedClusterer binnedClustering;
 	std::unique_ptr<ResidualHistogrammer> residualHistograms;
 	std::unique_ptr<TrackHistogrammer> trackHistograms;
 

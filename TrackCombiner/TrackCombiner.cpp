@@ -49,9 +49,9 @@ void TrackCombiner::openFile(std::string outputFileName) {
 	outputTree->Branch("matched", &currentEntry.matched);
 
 	for(int i=0; i<nChips; i++) {
-		hists[i]=std::unique_ptr<ChipHistogrammer>( new ChipHistogrammer("chip"+std::to_string(i)) );
+		hists[i]=std::unique_ptr<ChipHistogrammer>( new ChipHistogrammer("chip"+std::to_string(i), alignment) );
 	}
-	quadHist=std::unique_ptr<ChipHistogrammer>( new ChipHistogrammer("quad") );
+	quadHist=std::unique_ptr<ChipHistogrammer>( new ChipHistogrammer("quad", alignment) );
 
 }
 
@@ -64,7 +64,7 @@ void TrackCombiner::Process() {
 
 
 	for(int telescopeEntryNumber=0,tpcEntryNumber=0; //5000000, 2308829
-			telescopeEntryNumber<1E5 //telescopeFitter.nEvents//1000000
+			telescopeEntryNumber<5E4 //telescopeFitter.nEvents//1000000
 			;) {
 //		triggerStatusHistogram.reset();
 
@@ -128,7 +128,7 @@ void TrackCombiner::Process() {
 		}
 		quadHist->fillEvent();
 
-		const bool drawEvent=false;
+		const bool drawEvent=true;
 		if(drawEvent) {
 			//		SimpleDetectorConfiguration setupForDrawing { 0,30 /*x*/, 0,42 /*y beam*/, -20,20/*z drift*/};
 			auto setupForDrawing=simpleDetectorFromChipCorners(alignment.getAllChipCorners());

@@ -89,8 +89,8 @@ namespace {
 }
 
 struct ChipHistogrammer {
-	ChipHistogrammer(const char* name) : ChipHistogrammer(std::string(name)) {}
-	ChipHistogrammer(std::string name) ;
+	ChipHistogrammer(const char* name, const Alignment& align) : ChipHistogrammer(std::string(name), align) {}
+	ChipHistogrammer(std::string name, const Alignment& align) ;
 
 	std::unique_ptr<TH1I> nHits;
 	std::unique_ptr<TH1D> driftTime, ToT, zHit;
@@ -111,7 +111,7 @@ private:
 	int hitsCounter=0;
 };
 
-ChipHistogrammer::ChipHistogrammer(std::string name) : dirName(name) {
+ChipHistogrammer::ChipHistogrammer(std::string name, const Alignment& align) : dirName(name) {
 	using namespace std;
 
 	//change directory
@@ -129,7 +129,12 @@ ChipHistogrammer::ChipHistogrammer(std::string name) : dirName(name) {
 	zResidual=unique_ptr<TH1D>(new TH1D{"zResidual", "z-residual;z-residual [mm]; Hits", 80,-4,4});
 
 	pixelHitMap=unique_ptr<TH2D>(new TH2D{"pixelHitMap", "Hitmap by pixel;Columns;Rows", 256,0, 256, 256,0,256});
-	positionHitMap=unique_ptr<TH2D>(new TH2D{"positionHitMap", "Hitmap with positions;x-position [mm];y-position [mm]",int(30/.055),-3,27,int(40/.055),153,193});
+	auto corners=align.getAllChipCorners();
+	auto xrange=std::minmax_element(corners.begin(), corners.end(), [](const TVector3& v, const TVector3& w){return v.x()<w.x();});
+	auto yrange=std::minmax_element(corners.begin(), corners.end(), [](const TVector3& v, const TVector3& w){return v.y()<w.y();});
+	auto xmin=xrange.first->x(),xmax=xrange.second->x(),ymin=yrange.first->y(),ymax=yrange.second->y();
+	positionHitMap=unique_ptr<TH2D>(new TH2D{"positionHitMap", "Hitmap with positions;x-position [mm];y-position [mm]",
+		int((xmax-xmin)/.055),xrange.first->x(),xrange.second->x(),int((ymax-ymin)/.055),yrange.first->y(), yrange.second->y()});
 
 	xRotation=unique_ptr<TH1D>(new TH1D{"xRotation", "x-rotation;x-rotation [rad.]; Hits", 100,-0.5,0.5});
 	yRotation=unique_ptr<TH1D>(new TH1D{"yRotation", "y-rotation;y-rotation [rad.]; Hits", 100,-0.5,0.5});
@@ -218,19 +223,25 @@ void QuadTrackFitter::Loop(std::string outputFile,const Alignment& alignment) {
 
 	Vec3 averageHitPosition;
 	std::vector<int> nHits(4);
+	std::vector<int> nHitsPassed(4);
 	int nHitsPassedTotal{0};
 
 	TTree fitResults("fitResults", "fitResults");
 	fitResults.Branch("hits", "std::vector<PositionHit>", &posHits);
 	fitResults.Branch("hitAverage", "Vec3", &averageHitPosition);
-	fitResults.Branch("nHitsPassedChip", "std::vector<int>", &nHits);
+	fitResults.Branch("nHitsChip", "std::vector<int>", &nHits);
+	fitResults.Branch("nHitsPassedChip", "std::vector<int>", &nHitsPassed);
 	fitResults.Branch("nHitsPassed", &nHitsPassedTotal);
 
   auto zResidualByToT=std::unique_ptr<TH2D>(new TH2D{"zResidualByToT", "z-residual by ToT;ToT [#mus]; z-residual [mm]", 100,0,2.5, 200,-4,6});
   auto zResidualByToTCorrected=std::unique_ptr<TH2D>(new TH2D{"zResidualByToTCorrected", "z-residual by ToT;ToT [#mus]; z-residual [mm]", 100,0,2.5, 200,-4,6});
 
-	std::array<ChipHistogrammer, nChips> hists{"chip1","chip2","chip3","chip4"};
-	ChipHistogrammer quad{"quad"};
+	std::array<ChipHistogrammer, nChips> hists{{
+		{"chip1", alignment},
+		{"chip2", alignment},
+		{"chip3", alignment},
+		{"chip4", alignment} }};
+	ChipHistogrammer quad{"quad", alignment};
 
 	auto nEntries=reader.tree->GetEntries();
 	std::cout<<nEntries<<" entries\n";
@@ -238,15 +249,26 @@ void QuadTrackFitter::Loop(std::string outputFile,const Alignment& alignment) {
 	while( getEntry(cEntry++) ) {
 		if( !(cEntry%10000) ) std::cout<<"entry "<<cEntry<<" / "<<nEntries<<"\n";
 
+
 		//retrieve hits
 		posHits=getSpaceHits(alignment);
-		nHits=getHitsPerChip(posHits,true);
-		nHitsPassedTotal=std::accumulate(nHits.begin(), nHits.end(),0);
+		nHits=getHitsPerChip(posHits,false);
+		nHitsPassed=getHitsPerChip(posHits,true);
+		nHitsPassedTotal=std::accumulate(nHitsPassed.begin(), nHitsPassed.end(),0);
 
-//		if( (nHits[0]>10 and nHits[1]>10) or (nHits[2]>10 and nHits[3]>10) ) {
-//		} else {
-//			continue;
-//		}
+		if( (nHits[0] + nHits[1]>30) ) {
+			for(auto& h : posHits) {
+				if(h.chip==2 or h.chip==3 )
+					h.flag=PositionHit::Flag::debug;
+			}
+		} else if ( (nHits[2]+nHits[3]>30) ) {
+			for(auto& h : posHits) {
+				if(h.chip==0 or h.chip==1 )
+					h.flag=PositionHit::Flag::debug;
+			}
+		} else {
+			continue;
+		}
 
 		averageHitPosition={0,0,0};
 		for(auto& h : posHits) {
@@ -274,11 +296,11 @@ void QuadTrackFitter::Loop(std::string outputFile,const Alignment& alignment) {
 
 		fitResults.Fill();
 
-		bool draw=false;
+		bool draw=true;
 		if(draw) {
 //			SimpleDetectorConfiguration setupForDrawing { 10,40 /*x*/, 0,42 /*y beam*/, -10,40/*z drift*/};
 			auto setupForDrawing=simpleDetectorFromChipCorners(alignment.getAllChipCorners());
-			setupForDrawing.minz=-10, setupForDrawing.maxz=30;
+			setupForDrawing.minz=-5E3*alignment.driftSpeed.value, setupForDrawing.maxz=5E3*alignment.driftSpeed.value;
 			HoughTransformer::drawCluster(posHits,setupForDrawing);
 			if(processDrawSignals()) break;
 		}

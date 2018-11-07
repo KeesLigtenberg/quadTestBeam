@@ -1,5 +1,5 @@
 /*
- * buildEvent.h
+d * buildEvent.h
  *
  *  Created on: Oct 8, 2018
  *      Author: cligtenb
@@ -52,7 +52,7 @@ struct TreeReader {
 		tree->GetEntry(++currentEntry);
 	}
 	bool reachedEnd() {
-		return currentEntry+5>=nEntries;
+		return currentEntry+2>=nEntries;
 	}
 };
 
@@ -93,8 +93,8 @@ struct TriggerTreeReader : TreeReader {
 	}
 
 	struct Trigger {
-		unsigned long long toa;
-		unsigned number;
+		unsigned long long toa=0;
+		unsigned number=0;
 	};
 	std::vector<int> getNextTriggerWord( unsigned long long firstToa) {
 		unsigned timeDifference=0;
@@ -118,6 +118,16 @@ struct TriggerTreeReader : TreeReader {
 		auto triggerword=getNextTriggerWord(trigger.toa);
 		trigger.number = decoder.getNextTriggerFromTimes(triggerword);
 		return trigger;
+	}
+	//skip wrong zero triggers
+	Trigger getNextTriggerForced() try {
+		return getNextTrigger();
+	} catch(TriggerDecoder::TriggerDecoderException& e) {
+		if(e.description=="wrong zero!") {
+			std::cout<<e.description<<"\n";
+			return getNextTriggerForced();
+		}
+		throw e;
 	}
 
 	void updateOffsetAndBinWidth(int sampleSize=20) {
@@ -174,8 +184,8 @@ struct TriggerTreeReader : TreeReader {
 struct CombinedTreeWriter {
 	TTree tree;
 	std::vector<Hit> chips[4];
-	long long triggerToA;
-	unsigned triggerNumber;
+	long long triggerToA=0;
+	unsigned triggerNumber=0;
 
 	CombinedTreeWriter() {
 		tree.Branch( "triggerToA", &triggerToA );
@@ -185,7 +195,9 @@ struct CombinedTreeWriter {
 	}
 	void fill() {
 			tree.Fill();
-			for(auto& c : chips) c.clear();
+	}
+	void clear() {
+		for(auto& c : chips) c.clear();
 	}
 };
 
@@ -219,12 +231,12 @@ void convertToTree(std::string inputFileName, std::string outputFileName) {
 			if(e.description=="wrong zero!") { std::cout<<e.description<<"\n"; continue; }
 			else throw e;
 		}
-		if(!(trigger.number%10000) or trigger.number>2239000) {
+		if(!(trigger.number%10000)) {
 			std::cout<<trigger.number<<" at time "<<trigger.toa<<"\n";
 			std::cout<<"trigger reader entry: "<<triggerReader.currentEntry<<"/"<<triggerReader.nEntries<<"\n";
 			std::cout<<"chip 0 reader entry: "<<chips[0]->currentEntry<<"/"<<chips[0]->nEntries<<"\n";
 		}
-		if(trigger.number>100000) break;
+		if(trigger.number>1000000) break;
 
 		//set triggerReader
 		outputTrees.triggerToA=trigger.toa;
@@ -244,8 +256,9 @@ void convertToTree(std::string inputFileName, std::string outputFileName) {
 
 		//fill tree after each triggerReader
 		outputTrees.fill();
+		outputTrees.clear();
 	}
-	std::cout<<"finished reading triggers, now writing trees\n";
+	std::cout<<"finished reading triggers, now writing trees with "<<outputTrees.tree.GetEntries()<<"\n";
 
 	outputTrees.tree.Write("data");
 	std::cout<<"wrote tree, now closing file..\n";

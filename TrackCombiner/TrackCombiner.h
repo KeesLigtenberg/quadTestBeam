@@ -42,7 +42,7 @@ private:
 		bool matched;
 	} currentEntry;
 
-	int triggerOffset=0;
+	const int triggerOffset=0;
 	int nTelescopeTriggers=0;
 	int previousTriggerNumberBegin=0, previousTriggerNumberEnd=0;
 	bool hadFirstMatch=false;
