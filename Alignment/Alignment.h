@@ -13,6 +13,7 @@
 #include "TGraph.h"
 #include "TH1.h"
 #include "TFitResult.h"
+#include "TPolyLine.h"
 
 
 #include "AlignmentHolder.h"
@@ -73,6 +74,17 @@ struct Alignment {
 			all.insert(all.end(), corners.begin(), corners.end());
 		}
 		return all;
+	}
+	void drawChipEdges() const {
+		for(int i=0; i<4; i++) {
+			auto corners=getChipCorners(i);
+			TPolyLine l;
+			for(auto& corner : corners) {
+				l.SetNextPoint(corner.x(), corner.y());
+			}
+			l.SetNextPoint(corners[0].x(), corners[0].y());
+			l.DrawClone();
+		}
 	}
 };
 

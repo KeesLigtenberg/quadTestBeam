@@ -249,6 +249,7 @@ void QuadTrackFitter::Loop(std::string outputFile,const Alignment& alignment) {
 	while( getEntry(cEntry++) ) {
 		if( !(cEntry%10000) ) std::cout<<"entry "<<cEntry<<" / "<<nEntries<<"\n";
 
+		if(cEntry>=1E5) break;
 
 		//retrieve hits
 		posHits=getSpaceHits(alignment);
@@ -256,19 +257,19 @@ void QuadTrackFitter::Loop(std::string outputFile,const Alignment& alignment) {
 		nHitsPassed=getHitsPerChip(posHits,true);
 		nHitsPassedTotal=std::accumulate(nHitsPassed.begin(), nHitsPassed.end(),0);
 
-		if( (nHits[0] + nHits[1]>30) ) {
-			for(auto& h : posHits) {
-				if(h.chip==2 or h.chip==3 )
-					h.flag=PositionHit::Flag::debug;
-			}
-		} else if ( (nHits[2]+nHits[3]>30) ) {
-			for(auto& h : posHits) {
-				if(h.chip==0 or h.chip==1 )
-					h.flag=PositionHit::Flag::debug;
-			}
-		} else {
-			continue;
-		}
+//		if( (nHits[0] + nHits[1]>70) ) {
+//			for(auto& h : posHits) {
+//				if(h.chip==2 or h.chip==3 )
+//					h.flag=PositionHit::Flag::debug;
+//			}
+//		} else if ( (nHits[2]+nHits[3]>70) ) {
+//			for(auto& h : posHits) {
+//				if(h.chip==0 or h.chip==1 )
+//					h.flag=PositionHit::Flag::debug;
+//			}
+//		} else {
+//			continue;
+//		}
 
 		averageHitPosition={0,0,0};
 		for(auto& h : posHits) {
@@ -298,10 +299,18 @@ void QuadTrackFitter::Loop(std::string outputFile,const Alignment& alignment) {
 
 		bool draw=true;
 		if(draw) {
+			std::cout<<"nHitsPassed="<<nHitsPassedTotal<<"";
 //			SimpleDetectorConfiguration setupForDrawing { 10,40 /*x*/, 0,42 /*y beam*/, -10,40/*z drift*/};
 			auto setupForDrawing=simpleDetectorFromChipCorners(alignment.getAllChipCorners());
 			setupForDrawing.minz=-5E3*alignment.driftSpeed.value, setupForDrawing.maxz=5E3*alignment.driftSpeed.value;
-			HoughTransformer::drawCluster(posHits,setupForDrawing);
+
+//			HoughTransformer::drawCluster(posHits,setupForDrawing);
+//			drawQuadOutline(alignment, setupForDrawing.zmin() );
+
+			drawCluster2D(posHits,setupForDrawing);
+			alignment.drawChipEdges();
+
+			gPad->Update();
 			if(processDrawSignals()) break;
 		}
 	}

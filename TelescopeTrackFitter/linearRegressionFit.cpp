@@ -6,6 +6,7 @@
  */
 
 #include <iostream>
+#include "TPolyLine.h"
 
 #include "linearRegressionFit.h"
 
@@ -17,6 +18,15 @@ void FitResult3D::draw(double zmin, double zmax) const { //in timepix frame, wit
 	double y[npoints] = { YZ.at(zmin), YZ.at(zmax)};
 	double z[npoints] = { zmin, zmax};
 	TPolyLine3D l( npoints, x, z, y );
+	l.SetLineColor(kOrange+7);
+	l.SetLineWidth(2);
+	l.DrawClone();
+}
+void FitResult2D::draw(double zmin, double zmax) const { //in timepix frame, with telescope coordinates!
+	const int npoints=2;
+	double x[npoints] = {at(zmin), at(zmax)};
+	double z[npoints] = { zmin, zmax};
+	TPolyLine l( npoints, x, z );
 	l.SetLineColor(kOrange+7);
 	l.SetLineWidth(2);
 	l.DrawClone();

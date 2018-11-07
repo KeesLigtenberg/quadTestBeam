@@ -132,8 +132,7 @@ struct HoughTransformer {
 		while(int(hitList.size())>minClusterSize) {
 
 			//construct grid
-			std::vector< std::vector< std::list<const PositionHit*> > > houghGrid( xbins+1 );
-			for(auto& v : houghGrid) v.resize(ybins+1);
+			std::vector< std::vector< int > > houghGrid( xbins+1, std::vector<int>(ybins+1,0) );
 
 			constexpr bool DrawHistogram=false;
 			std::unique_ptr<TH2D> graphicHistogram{
@@ -151,7 +150,7 @@ struct HoughTransformer {
 					int biny=(r-rmin)/(rmax-rmin)*ybins;
 
 //					std::cout<<"fill r="<<r<<" and angle="<<angle<<"at bin "<<binx<<", "<<biny<<"\n";
-					if(biny>=0 and biny<=ybins) houghGrid.at(binx).at(biny).push_back(h);
+					if(biny>=0 and biny<=ybins) houghGrid.at(binx).at(biny)++;
 
 					if(DrawHistogram) graphicHistogram->Fill(binx,biny);
 				}
@@ -176,8 +175,8 @@ struct HoughTransformer {
 			int maxBinx=0, maxBiny=0;
 			for(int col=0; col<=xbins; col++) {
 				for(int row=0; row<=ybins; row++) {
-					if(int(houghGrid[col][row].size()) > maxBinEntries) {
-						maxBinEntries=houghGrid[col][row].size();
+					if(int(houghGrid[col][row]) > maxBinEntries) {
+						maxBinEntries=houghGrid[col][row];
 						maxBinx=col; maxBiny=row;
 					}
 				}
@@ -188,9 +187,19 @@ struct HoughTransformer {
 
 			//make houghcluster from largest
 			HitCluster hc;
-			for(auto hp : houghGrid[maxBinx][maxBiny]) {
-				hc.add(*hp);
-				hitList.remove(hp);
+			for(auto ith=hitList.begin(); ith!=hitList.end(); ) {
+				auto h=*ith;
+				double angleRange=0.02;
+				double angle=angleOfTracksX-angleRange/2.+maxBinx*angleRange/xbins;
+				double r=h->position.x*cos(angle) + h->position.z*sin(angle);
+				double rmin=0, rmax=20;
+				int biny=(r-rmin)/(rmax-rmin)*ybins;
+				if(biny==maxBiny) {
+					hc.add(*h);
+					ith=hitList.erase(ith);
+				} else {
+					ith++;
+				}
 			}
 			foundClusters.push_back(hc);
 
@@ -409,6 +418,64 @@ inline void HoughTransformer::drawCluster(const T& cluster, const DetectorConfig
 	axisObject->SetLineWidth(2);
 	legend->AddEntry(axisObject, "Telescope track", "l");
 	legend->Draw();
+
+	gPad->Update();
+
+}
+
+template<class T > //=std::list<HitCluster>
+inline void drawCluster2D(const T& cluster, const DetectorConfiguration& detector) {
+	TTree pointTree;
+	PositionHit h(1E4,1E4,1E4,0, Hit{0,0,0,0} );
+	pointTree.Branch("h", "PositionHit", &h);
+//	pointTree.Fill(); //fill one with zero ToT to set scale
+
+	for(auto& iHit : cluster ) {
+		h=iHit;
+//		std::cout<<int(h.ToT)<<"\n";
+//		if(h.flag==PositionHit::Flag::valid)
+			pointTree.Fill();
+	}
+	if(not pointTree.GetEntries()) return;
+
+	gStyle->SetMarkerStyle(7);
+	gStyle->SetOptTitle(0);
+	double totAxis=1.6;
+	static TCanvas* canv=new TCanvas("cluster_display", "Event display", 600,800);
+	canv->cd();
+	pointTree.Draw( "h.position.y:h.position.x" , "", ""); //ToT to microseconds
+
+	TH1* axisObject= dynamic_cast<TH1*>( gPad->GetPrimitive("htemp") );
+	auto yaxis=axisObject->GetYaxis();
+	if(!yaxis) {std::cout<<"could not get yaxis!?\n"; throw 1;}
+	yaxis->SetTitle("y-axis (beam direction) [mm]");
+	yaxis->SetLimits(detector.ymin(),detector.ymax());
+	auto xaxis=axisObject->GetXaxis();
+	if(!xaxis) {std::cout<<"could not get xaxis!?\n"; throw 1;}
+	xaxis->SetLimits(detector.xmin(),detector.xmax());
+	xaxis->SetTitle("x-axis [mm]");
+	for(auto axis : {xaxis, yaxis} )
+		axis->SetTitleOffset(1.1);
+	for(auto axis : {xaxis, yaxis} ) {
+		axis->SetTitleSize(0.05);
+		axis->SetLabelSize(0.05);
+	}
+//	axisObject->SetMaximum(totAxis);
+//	axisObject->SetMinimum(0);
+
+	axisObject->Draw();
+	pointTree.Draw( "h.position.y:h.position.x" , "", "same");
+	gPad->SetMargin(0.15,0.1,0.1,0.05);//l r b t
+	gPad->Update();
+
+//
+//	TLegend* legend= new TLegend( 0.6, 0.8, 0.95,0.95 );
+//	legend->SetName("eventDisplayLegend");
+//	legend->AddEntry(axisObject, "Timepix hits", "p");
+//	axisObject->SetLineColor(kOrange+7);
+//	axisObject->SetLineWidth(2);
+//	legend->AddEntry(axisObject, "Telescope track", "l");
+//	legend->Draw();
 
 	gPad->Update();
 

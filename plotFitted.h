@@ -32,17 +32,8 @@ std::vector<int> chipReverseMapping={4,2,1,3};//for canv->cd
 
 void drawChipEdges(std::string alignFile="../align.dat") {
 	Alignment	alignment(alignFile);
-	for(int i=0; i<nChips; i++) {
-		auto corners=alignment.getChipCorners(i);
-		TPolyLine l;
-		for(auto& corner : corners) {
-			l.SetNextPoint(corner.x(), corner.y());
-		}
-		l.SetNextPoint(corners[0].x(), corners[0].y());
-		l.DrawClone();
-	}
+	alignment.drawChipEdges();
 	gStyle->SetOptStat(0);
-
 }
 
 void combineHistogramsForChips(std::string histName="nHits", std::string fileName="fitted.root") {

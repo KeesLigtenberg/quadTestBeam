@@ -64,7 +64,7 @@ void TrackCombiner::Process() {
 
 
 	for(int telescopeEntryNumber=0,tpcEntryNumber=0; //5000000, 2308829
-			telescopeEntryNumber<5E4 //telescopeFitter.nEvents//1000000
+			telescopeEntryNumber<1E4 //telescopeFitter.nEvents//1000000
 			;) {
 //		triggerStatusHistogram.reset();
 
@@ -135,14 +135,22 @@ void TrackCombiner::Process() {
 			setupForDrawing.minz=-10, setupForDrawing.maxz=30;
 			//		SimpleDetectorConfiguration setupForDrawing { 10,40 /*x*/, 0,400 /*y beam*/, 0,40/*z drift*/};
 
-			std::cout<<"draw telescope hits\n";
-			telescopeFitter.drawEvent(telescopeHits,telescopeFits);
+//			std::cout<<"draw telescope hits\n";
+//			telescopeFitter.drawEvent(telescopeHits,telescopeFits);
 	//		HoughTransformer::drawClusters(telescopeHits, setupForDrawing);
-			std::cout<<"draw quad hits "<<quadHits.size()<<"\n";
-			HoughTransformer::drawCluster(quadHits,setupForDrawing);
+
+//			std::cout<<"draw quad hits "<<quadHits.size()<<"\n";
+//			HoughTransformer::drawCluster(quadHits,setupForDrawing);
+//			for (auto& f : telescopeFits)
+//				f.draw( setupForDrawing.ymin(), setupForDrawing.ymax() );
+//			drawQuadOutline(alignment, setupForDrawing.zmin() );
+
+			drawCluster2D(quadHits,setupForDrawing);
+			alignment.drawChipEdges();
 			for (auto& f : telescopeFits)
-				f.draw( setupForDrawing.ymin(), setupForDrawing.ymax() );
-			drawQuadOutline(alignment, setupForDrawing.zmin() );
+				f.XZ.draw( setupForDrawing.ymin(), setupForDrawing.ymax() );
+
+
 			gPad->Update();
 			if(processDrawSignals()) break;
 		}
