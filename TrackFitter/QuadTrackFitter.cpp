@@ -98,7 +98,7 @@ struct ChipHistogrammer {
 	std::unique_ptr<TH2D> pixelHitMap, positionHitMap;
 	std::unique_ptr<TH1D> xRotation, yRotation, zRotation;
 	std::unique_ptr<TH2D> zResidualByToT, zResidualByToTCorrected;
-	std::unique_ptr<TH2D> xResidualByz, yResidualByz,zResidualByz;
+	std::unique_ptr<TH2D> xResidualByz, yResidualByz,zResidualByz,zResidualByDriftTime;
 
 	void fillHit(const PositionHit& h);
 	void fillRotation(const PositionHit& h, const TVector3& COM);
@@ -143,9 +143,10 @@ ChipHistogrammer::ChipHistogrammer(std::string name, const Alignment& align) : d
 	zResidualByToT=std::unique_ptr<TH2D>(new TH2D{"zResidualByToT", "z-residual by ToT;ToT [#mus]; z-residual [mm]", 100,0,2.5, 200,-5,5});
 	zResidualByToTCorrected=std::unique_ptr<TH2D>(new TH2D{"zResidualByToTCorrected", "z-residual by ToT;ToT [#mus]; z-residual [mm]", 100,0,2.5, 200,-5,5});
 
-	xResidualByz=std::unique_ptr<TH2D>(new TH2D{"xResidualByz", "x-residuals as a function of drift distance;Drift distance [mm];x-residual [mm]", 26,-1,25,25,-2,2});
-	yResidualByz=std::unique_ptr<TH2D>(new TH2D{"yResidualByz", "y-residuals as a function of drift distance;Drift distance [mm];y-residual [mm]", 26,-1,25,25,-2,2});
-	zResidualByz=std::unique_ptr<TH2D>(new TH2D{"zResidualByz", "z-residuals as a function of drift distance;Drift distance [mm];z-residual [mm]", 26,-1,25,50,-2,2});
+	xResidualByz=std::unique_ptr<TH2D>(new TH2D{"xResidualByz", "x-residuals as a function of drift distance;Drift distance [mm];x-residual [mm]", 75,-1,14,25,-2,2});
+	yResidualByz=std::unique_ptr<TH2D>(new TH2D{"yResidualByz", "y-residuals as a function of drift distance;Drift distance [mm];y-residual [mm]", 75,-1,14,25,-2,2});
+	zResidualByz=std::unique_ptr<TH2D>(new TH2D{"zResidualByz", "z-residuals as a function of drift distance;Drift distance [mm];z-residual [mm]", 75,-1,14,50,-2,2});
+	zResidualByDriftTime=std::unique_ptr<TH2D>(new TH2D{"zResidualByDriftTime", "z-residuals as a function of drift time;Drift time [#mus];z-residual [mm]", int(0.8/ToABinWidth),-0.39999,0.4,50,-2,2});
 
 	startDir->cd();
 }
@@ -164,6 +165,7 @@ void ChipHistogrammer::fillHit(const PositionHit& h) {
 	xResidualByz->Fill(h.position.z,h.residual.x);
 	yResidualByz->Fill(h.position.z,h.residual.y);
 	zResidualByz->Fill(h.position.z,h.residual.z);
+	zResidualByDriftTime->Fill(h.driftTime/4096.*25E-3,h.residual.z);
 	hitsCounter++;
 }
 
@@ -282,9 +284,9 @@ void QuadTrackFitter::Loop(std::string outputFile,const Alignment& alignment) {
 
 			if(h.flag!=PositionHit::Flag::valid) continue;
 			hists[h.chip].fillHit(h);
-			hists[h.chip].fillRotation(h, alignment.chips[h.chip].COM);
+			hists[h.chip].fillRotation(h, alignment.chips[h.chip].getCOMGlobal() );
 			quad.fillHit(h);
-			quad.fillRotation(h, alignment.quad.COM);
+			quad.fillRotation(h, alignment.quad.getCOMGlobal());
 
 			averageHitPosition=averageHitPosition+h.position;
 		}

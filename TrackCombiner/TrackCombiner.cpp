@@ -64,7 +64,7 @@ void TrackCombiner::Process() {
 
 
 	for(int telescopeEntryNumber=0,tpcEntryNumber=0; //5000000, 2308829
-			telescopeEntryNumber<1E4 //telescopeFitter.nEvents//1000000
+			telescopeEntryNumber<1E5 //telescopeFitter.nEvents//1000000
 			;) {
 //		triggerStatusHistogram.reset();
 
@@ -100,7 +100,7 @@ void TrackCombiner::Process() {
  		auto avPosition=getAveragePosition(quadHits);
  		bool matched=false;
  		for(auto&f : telescopeFits) {
- 			if( std::fabs(avPosition.x()-f.xAt(193.25))<2 and std::fabs(avPosition.z()-f.yAt(193.25))<2 ) {
+ 			if( std::fabs( avPosition.x()-f.xAt( avPosition.y()) )<2 and std::fabs( avPosition.z()-f.yAt(avPosition.y()) )<2 ) {
  				matched=true;
  				for(auto& h : quadHits) {
  					h=calculateResidualTimepix(h, f);
@@ -112,13 +112,14 @@ void TrackCombiner::Process() {
 
  		if(matched) {
  			for(auto& h : quadHits) {
+ 				if(h.flag!=PositionHit::Flag::valid) continue;
  				hists[h.chip]->fillTimewalk(h, alignment.timeWalk);
  				quadHist->fillTimewalk(h, alignment.timeWalk);
 
  				hists[h.chip]->fillHit(h);
- 				hists[h.chip]->fillRotation(h, alignment.chips[h.chip].COM);
+ 				hists[h.chip]->fillRotation(h, alignment.chips[h.chip].getCOMGlobal());
  				quadHist->fillHit(h);
- 				quadHist->fillRotation(h, alignment.quad.COM);
+ 				quadHist->fillRotation(h, alignment.quad.getCOMGlobal());
  			}
  		}
 
@@ -128,8 +129,7 @@ void TrackCombiner::Process() {
 		}
 		quadHist->fillEvent();
 
-		const bool drawEvent=true;
-		if(drawEvent) {
+		if(drawEvent && matched) {
 			//		SimpleDetectorConfiguration setupForDrawing { 0,30 /*x*/, 0,42 /*y beam*/, -20,20/*z drift*/};
 			auto setupForDrawing=simpleDetectorFromChipCorners(alignment.getAllChipCorners());
 			setupForDrawing.minz=-10, setupForDrawing.maxz=30;
@@ -139,16 +139,17 @@ void TrackCombiner::Process() {
 //			telescopeFitter.drawEvent(telescopeHits,telescopeFits);
 	//		HoughTransformer::drawClusters(telescopeHits, setupForDrawing);
 
-//			std::cout<<"draw quad hits "<<quadHits.size()<<"\n";
-//			HoughTransformer::drawCluster(quadHits,setupForDrawing);
-//			for (auto& f : telescopeFits)
-//				f.draw( setupForDrawing.ymin(), setupForDrawing.ymax() );
-//			drawQuadOutline(alignment, setupForDrawing.zmin() );
-
-			drawCluster2D(quadHits,setupForDrawing);
-			alignment.drawChipEdges();
+			std::cout<<"draw quad hits "<<quadHits.size()<<"\n";
+			HoughTransformer::drawCluster(quadHits,setupForDrawing);
 			for (auto& f : telescopeFits)
-				f.XZ.draw( setupForDrawing.ymin(), setupForDrawing.ymax() );
+				f.draw( setupForDrawing.ymin(), setupForDrawing.ymax() );
+			drawQuadOutline(alignment, setupForDrawing.zmin() );
+
+			//2D
+//			drawCluster2D(quadHits,setupForDrawing);
+//			alignment.drawChipEdges();
+//			for (auto& f : telescopeFits)
+//				f.XZ.draw( setupForDrawing.ymin(), setupForDrawing.ymax() );
 
 
 			gPad->Update();

@@ -10,9 +10,10 @@
 
 #include "TrackCombiner.cpp"
 
-void combineTracks(std::string quad, std::string mimosa) {
+void combineTracks(std::string quad, std::string mimosa, bool draw=false) {
 	Alignment align("align.dat");
 	TrackCombiner tc(quad, mimosa, align);
+	tc.drawEvent=draw;
 
 	tc.telescopeFitter.getEntry(10);
 	auto hits=tc.telescopeFitter.getSpaceHits();
@@ -21,6 +22,25 @@ void combineTracks(std::string quad, std::string mimosa) {
 
 	tc.openFile("combinedFit.root");
 	tc.Process();
+}
+
+void updateAlignmentFromFile(std::string resultFile="combinedFit.root", std::string alignFile="align.dat") {
+	Alignment alignment(alignFile);
+	TFile file(resultFile.c_str(), "READ");
+//		alignment.updateAll(file);
+	alignment.updateShifts(file);
+//		alignment.quad.updateShift(file,"quad",2);
+	alignment.updateRotations(file);
+//		alignment.timeWalk.update(file);
+//		alignment.updateDriftSpeed(file);
+		alignment.write("align.dat");
+}
+
+void combineTracksAndUpdateAlignment(std::string quad, std::string mimosa, int nIterations=3) {
+	for(int i=0; i<3; i++) {
+		combineTracks(quad, mimosa);
+		updateAlignmentFromFile();
+	}
 }
 
 

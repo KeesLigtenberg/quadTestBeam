@@ -27,6 +27,8 @@ public:
 	TelescopeTrackFitter telescopeFitter;
 	Alignment& alignment;
 
+	bool drawEvent=false;
+
 private:
 	std::unique_ptr<TFile> outputFile{nullptr};
 	std::unique_ptr<TTree> outputTree{nullptr};

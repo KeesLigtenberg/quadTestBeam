@@ -105,8 +105,12 @@ struct AlignValueHolder : AlignmentHolder {
 struct ShiftAndRotateAlignment : AlignmentHolder {
 	using AlignmentHolder::AlignmentHolder;
 	TVector3 shift{};
-	TVector3 COM{};
+	TVector3 COM{}; //relative COM (before shift)
 	TVector3 rotation{};
+
+	TVector3 getCOMGlobal() const {
+		return COM+shift;
+	}
 
 	virtual Vec3 rotateAndShift(const Vec3& hpos) const {
 		TVector3 Thpos=hpos; //convert to TVector3 and then call the same function
@@ -114,11 +118,11 @@ struct ShiftAndRotateAlignment : AlignmentHolder {
 		return Thpos;
 	}
 	virtual TVector3& rotateAndShift(TVector3& hpos) const {
-		hpos+=shift;
 		for(int i=0; i<3; i++) {
 			const std::array<TVector3, 3> unitVectors={ TVector3{1,0,0}, TVector3{0,1,0}, TVector3{0,0,1} };
 			hpos=RotateAroundPoint(hpos, rotation[i],COM, unitVectors[i]);
 		}
+		hpos+=shift;
 		return hpos;
 	}
 	virtual Vec3 rotateAndShiftBack(const Vec3& hpos) const {
@@ -127,16 +131,17 @@ struct ShiftAndRotateAlignment : AlignmentHolder {
 		return Thpos;
 	}
 	virtual TVector3& rotateAndShiftBack(TVector3& hpos) const {
+		hpos-=shift;
 		for(int i=2; i>=0; i--) {
 			const std::array<TVector3, 3> unitVectors={ TVector3{1,0,0}, TVector3{0,1,0}, TVector3{0,0,1} };
 			hpos=RotateAroundPoint(hpos, -rotation[i],COM, unitVectors[i]);
 		}
-		hpos-=shift;
 		return hpos;
 	}
 
 	void updateShift(TFile&, std::string dirName);
 	void updateShift(TFile& file, const std::string& dirName, int axis);
+	void updateCOM(TFile& file, std::string dirName);
 	void updateRotation(TFile&, std::string dirName);
 
 private:
@@ -154,24 +159,24 @@ struct ChipAlignment : ShiftAndRotateAlignment {
 
 	using ShiftAndRotateAlignment::rotateAndShift;
 	TVector3& rotateAndShift(TVector3& hpos) const {
-		auto dir=(chipNumber==0 || chipNumber==3) ? -1 : 1 ; //because of chip orientation
-		hpos[0]*=dir; hpos[1]*=dir;
-		hpos+=shift;
 		for(int i=0; i<3; i++) {
 			const std::array<TVector3, 3> unitVectors={ TVector3{1,0,0}, TVector3{0,1,0}, TVector3{0,0,1} };
 			hpos=RotateAroundPoint(hpos, rotation[i],COM, unitVectors[i]);
 		}
+		auto dir=(chipNumber==0 || chipNumber==3) ? -1 : 1 ; //because of chip orientation
+		hpos[0]*=dir; hpos[1]*=dir;
+		hpos+=shift;
 		return hpos;
 	}
 	using ShiftAndRotateAlignment::rotateAndShiftBack;
 	TVector3& rotateAndShiftBack(TVector3& hpos) const {
+		hpos-=shift;
+		auto dir=(chipNumber==0 || chipNumber==3) ? -1 : 1 ;//because of chip orientation
+		hpos[0]*=-dir; hpos[1]*=dir;
 		for(int i=2; i>=0; i--) {
 			const std::array<TVector3, 3> unitVectors={ TVector3{1,0,0}, TVector3{0,1,0}, TVector3{0,0,1} };
 			hpos=RotateAroundPoint(hpos, -rotation[i],COM, unitVectors[i]);
 		}
-		hpos-=shift;
-		auto dir=(chipNumber==0 || chipNumber==3) ? -1 : 1 ;//because of chip orientation
-		hpos[0]*=-dir; hpos[1]*=dir;
 		return hpos;
 	}
 
@@ -233,7 +238,7 @@ void ShiftAndRotateAlignment::updateShift(TFile& file, std::string dirName) {
 	}
 }
 
-void ShiftAndRotateAlignment::updateRotation(TFile& file, std::string dirName) {
+void ShiftAndRotateAlignment::updateCOM(TFile& file, std::string dirName) {
 	//Find Center of Mass (point of rotation)
 	auto hitmap=getObjectFromFile<TH2>(dirName+"/positionHitMap", &file);
 	auto zHit=getObjectFromFile<TH1>(dirName+"/zHit", &file);
@@ -242,8 +247,11 @@ void ShiftAndRotateAlignment::updateRotation(TFile& file, std::string dirName) {
 	double meanX=hitmap->GetMean(1), meanY=hitmap->GetMean(2), meanZ=zHit->GetMean();
 	auto oldCOM=COM;
 	COM.SetXYZ(meanX,meanY,meanZ);
+	COM-=shift;
 	std::cout<<"updated COM by "<<COM-oldCOM<<"\n";
+}
 
+void ShiftAndRotateAlignment::updateRotation(TFile& file, std::string dirName) {
 	//Find rotation
 	for(int i=0; i<3; i++) {
 		const std::array<std::string,3> x={"x", "y", "z"};

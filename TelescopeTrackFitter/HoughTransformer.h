@@ -406,7 +406,7 @@ inline void HoughTransformer::drawCluster(const T& cluster, const DetectorConfig
 	paletteAxisLabel->SetTextAlign(kHAlignCenter+kVAlignCenter);
 	paletteAxisLabel->Draw();
 
-	double theta=-20 /*-20*/,phi=10 /*60*/;
+	double theta=-20 /*-20*/,phi=60 /*10*/;
 	//	std::cout<<"give angles!"<<std::endl;
 	//	std::cin>>theta>>phi;
 	gPad->GetView()->RotateView(theta, phi);
