@@ -48,6 +48,10 @@ void TrackCombiner::openFile(std::string outputFileName) {
 	outputTree->Branch("quadHits", "std::vector<PositionHit>", &currentEntry.quadHits);
 	outputTree->Branch("matched", &currentEntry.matched);
 
+	outputTree->Branch("telescopeTime", &currentEntry.telescopeTime);
+	outputTree->Branch("triggerToA", &currentEntry.triggerToA);
+
+
 	for(int i=0; i<nChips; i++) {
 		hists[i]=std::unique_ptr<ChipHistogrammer>( new ChipHistogrammer("chip"+std::to_string(i), alignment) );
 	}
@@ -120,6 +124,10 @@ void TrackCombiner::Process() {
  				hists[h.chip]->fillRotation(h, alignment.chips[h.chip].getCOMGlobal());
  				quadHist->fillHit(h);
  				quadHist->fillRotation(h, alignment.quad.getCOMGlobal());
+ 				auto localPosition=alignment.quad.rotateAndShiftBack(h.position);
+ 				auto localResidual=alignment.quad.rotateBack(h.residual);
+ 				hists[h.chip]->local.fill( localPosition, localResidual );
+ 				quadHist->local.fill( localPosition, localResidual );
  			}
  		}
 
@@ -162,6 +170,10 @@ void TrackCombiner::Process() {
 			currentEntry.nHitsPerChip=nHitsPerChip;
 			currentEntry.quadHits=quadHits;
 			currentEntry.matched=matched;
+
+			currentEntry.telescopeTime=telescopeFitter.timestamp;
+			currentEntry.triggerToA=quadFitter.reader.triggerToA;
+
 			outputTree->Fill();
 		}
 
@@ -184,7 +196,10 @@ TrackCombiner::MatchResult TrackCombiner::getAndMatchEntries(
 		int& telescopeEntry,
 		int& tpcStartEntry) {
 
-//	std::cout<<"starting getAndMatchEntries( "<<telescopeEntry<<", "<<tpcStartEntry<<")\n";
+	static bool printMatching = false;
+//	if(telescopeEntry>70E3) printMatching=true;
+
+	if(printMatching) std::cout<<"starting getAndMatchEntries( "<<telescopeEntry<<", "<<tpcStartEntry<<")\n";
 
 	//use modulus offset instead of doing actual modulus, to continue counting after 32768
 	long long modulusOffset=32768*int((quadFitter.triggerNumber()+triggerOffset)/32768);
@@ -199,9 +214,9 @@ TrackCombiner::MatchResult TrackCombiner::getAndMatchEntries(
 	//then we must get entries until the tpc triggernumber also passes the 32768 boundary ( is larger or equal to new trigger number)
 	if(telescopeFitter.triggerNumberBegin<previousTriggerNumberBegin
 			and not (quadFitter.triggerNumber()+triggerOffset-modulusOffset<500) ) {
-//		std::cout<<"telescope number decreased and tpc did not yet, get entries until tpc also passes boundary\n";
+			if(printMatching)		std::cout<<"telescope number decreased and tpc did not yet, get entries until tpc also passes boundary\n";
 		do {
-//			printTriggers(telescopeEntry, tpcStartEntry);
+			if(printMatching)			printTriggers(telescopeEntry, tpcStartEntry);
 			if( not quadFitter.getEntry(tpcStartEntry++) ) return MatchResult::end;
 		} while ( quadFitter.triggerNumber()+triggerOffset - modulusOffset - 32768 < telescopeFitter.triggerNumberBegin );
 		modulusOffset=32768*int((quadFitter.triggerNumber()+triggerOffset)/32768);
@@ -213,9 +228,9 @@ TrackCombiner::MatchResult TrackCombiner::getAndMatchEntries(
 	//get next entry until tpc trigger number is larger than or equal to begin
 	//or until the tpc trigger number decreases;
 	do {
-//		std::cout<<"getting tpc, until tpc trigger entry is larger or equal to begin\n";
+		if(printMatching)		std::cout<<"getting tpc, until tpc trigger entry is larger or equal to begin\n";
 		if( not quadFitter.getEntry(tpcStartEntry++) ) {
-			std::cout<<"could not get entry "<<tpcStartEntry-1<<"\n";
+			if(printMatching) std::cout<<"could not get entry "<<tpcStartEntry-1<<"\n";
 			return MatchResult::end;
 		}
 	} while( (quadFitter.triggerNumber()+triggerOffset-modulusOffset) < telescopeFitter.triggerNumberBegin
@@ -223,7 +238,7 @@ TrackCombiner::MatchResult TrackCombiner::getAndMatchEntries(
 
 	//if also larger than end: reached the end of this telescope frame, continue with next telescope frame;
 	if( (quadFitter.triggerNumber()+triggerOffset-modulusOffset) > telescopeFitter.triggerNumberEnd) {
-//		std::cout<<"continuing to next telescope frame\n";
+		if(printMatching)		std::cout<<"continuing to next telescope frame\n";
 //		triggerStatusHistogram.Fill("Trigger numbers do not match", 1);
 
 //		frameStatusHistogram.reset();
@@ -233,7 +248,7 @@ TrackCombiner::MatchResult TrackCombiner::getAndMatchEntries(
 		previousTriggerNumberEnd=telescopeFitter.triggerNumberEnd;
 		if( !telescopeFitter.getEntry(++telescopeEntry) ) return MatchResult::end;
 
-//		cout<<"increased telescopeEntry, first time pix match was: "<<timepixEntryFirstMatch<<endl;
+		if(printMatching)		cout<<"increased telescopeEntry, first time pix match was: "<<timepixEntryFirstMatch<<endl;
 
 		tpcStartEntry=timepixEntryFirstMatch;
 		hadFirstMatch=false;

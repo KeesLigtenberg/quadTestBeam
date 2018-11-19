@@ -47,7 +47,7 @@ private:
 	unsigned long long lastTrigger=0;
 	const int maxTriggerIncrease=3;
 	int triggersOutOfSync=0;
-	const int maxTriggerOutOfSync=5;
+	const int maxTriggerOutOfSync=20;
 	const int nbits;
 	
 };

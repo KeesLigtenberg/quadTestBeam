@@ -42,6 +42,8 @@ private:
 		std::vector<int> nHitsPerChip;
 		std::vector<PositionHit> quadHits;
 		bool matched;
+		long long triggerToA;
+		unsigned telescopeTime;
 	} currentEntry;
 
 	const int triggerOffset=0;
