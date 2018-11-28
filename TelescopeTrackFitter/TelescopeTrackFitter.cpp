@@ -171,7 +171,8 @@ void TelescopeTrackFitter::fitTracks(std::string outputfilename) {
 
 	//loop over all entries
 	long int nPassed=0,nClusters=0;
-	for( int iEvent=0; iEvent<nEvents; iEvent++ ) {
+	for( int iEvent=0; iEvent<1E5 //nEvents
+	; iEvent++ ) {
 
 		if(!(iEvent%10000))
 			std::cout<<"event "<<iEvent<<"/"<<nEvents<<"\r"<<std::flush;

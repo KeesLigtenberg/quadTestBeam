@@ -351,7 +351,7 @@ inline void HoughTransformer::drawCluster(const T& cluster, const DetectorConfig
 	for(auto& iHit : cluster ) {
 		h=iHit;
 //		std::cout<<int(h.ToT)<<"\n";
-		if(h.flag==PositionHit::Flag::valid)
+//		if(h.flag==PositionHit::Flag::valid)
 			pointTree.Fill();
 	}
 	if(not pointTree.GetEntries()) return;
@@ -361,6 +361,7 @@ inline void HoughTransformer::drawCluster(const T& cluster, const DetectorConfig
 	double totAxis=1.6;
 	static TCanvas* canv=new TCanvas("cluster_display", "Event display", 800,600);
 	canv->cd();
+//	pointTree.Draw( std::string("h.position.z:h.position.y:h.position.x:h.nShiftedTrigger").c_str() , "", "*colz"); //ToT to microseconds
 	pointTree.Draw( ("h.position.z:h.position.y:h.position.x:TMath::Min(h.ToT*0.025, "+std::to_string(totAxis)+")").c_str() , "", "*colz"); //ToT to microseconds
 
 	TH1* axisObject= dynamic_cast<TH1*>( gPad->GetPrimitive("htemp") );

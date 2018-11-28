@@ -9,6 +9,9 @@
 #define LASERDATAFITTER_ALIGNMENT_H_
 
 #include <array>
+#include <set>
+#include <iostream>
+#include <fstream>
 
 #include "TGraph.h"
 #include "TH1.h"
@@ -27,6 +30,7 @@ struct Alignment {
 	ShiftAndRotateAlignment quad{"QUAD"};
 	TimeWalkCorrector timeWalk;
 	AlignValueHolder<double> driftSpeed{"DRIFTSPEED"};
+	AlignValueHolder<double> t0Offset{"T0OFFSET"};
 	HitErrorCalculator hitErrors;
 	TelescopeAlignment mimosa;
 
@@ -40,6 +44,7 @@ struct Alignment {
 		quad.read(inFile);
 		timeWalk.read(inFile);
 		driftSpeed.read(inFile);
+		t0Offset.read(inFile);
 		hitErrors.read(inFile);
 		mimosa.read(inFile);
 	}
@@ -51,6 +56,7 @@ struct Alignment {
 		quad.write(outFile);
 		timeWalk.write(outFile);
 		driftSpeed.write(outFile);
+		t0Offset.write(outFile);
 		hitErrors.write(outFile);
 		mimosa.write(outFile);
 	}
@@ -58,6 +64,7 @@ struct Alignment {
 	void updateShifts(TFile& file);
 	void updateRotations(TFile& file);
 	void updateDriftSpeed(TFile& file);
+	void updateTimeWalk(TFile& file);
 
 	int getChipNumber(const TVector3& pos) const;
 	TVector3 transformBack(const TVector3& pos) const;
@@ -67,7 +74,7 @@ struct Alignment {
 		for(auto& c : corners) c=quad.rotateAndShift(c);
 		return corners;
 	}
-	std::vector<TVector3> getAllChipCorners() const {
+	std::vector<TVector3> getAllChipCorners() const { //in global frame
 		std::vector<TVector3> all;
 		for(int i=0; i<4; i++) {
 			auto corners=getChipCorners(i);
@@ -75,7 +82,15 @@ struct Alignment {
 		}
 		return all;
 	}
-	void drawChipEdges() const {
+	std::vector<TVector3> getAllChipCornersQuad() const { //in quad frame
+		std::vector<TVector3> all;
+		for(int i=0; i<4; i++) {
+			auto corners=chips[i].getChipCorners();
+			all.insert(all.end(), corners.begin(), corners.end());
+		}
+		return all;
+	}
+	void drawChipEdges() const { //in global frame
 		for(int i=0; i<4; i++) {
 			auto corners=getChipCorners(i);
 			TPolyLine l;
@@ -87,6 +102,40 @@ struct Alignment {
 		}
 	}
 };
+
+namespace {
+
+double getDriftSpeedFactor(TFile& file, bool draw) {
+	//calculate driftspeed
+//	std::cout<<"get zResidualByz from quad\n";
+	std::string histogramName="zResidualByz_locExp";
+	TH2D* zResidualByz = getObjectFromFile<TH2D>("quad/"+histogramName, &file);
+
+//	std::cout<<"fit slices!\n";
+	TF1* gausRange=new TF1("gausRange","gaus(0)", -3,3);
+	gausRange->SetParameters(4E4,0.05,0.22);
+	zResidualByz->FitSlicesY(gausRange,0,-1, 5, "QNR");
+
+//	std::cout<<"get slices!\n";
+	TH1 *zResidualByz_1 = dynamic_cast<TH1*>( gDirectory->Get( (histogramName+"_1").c_str() ) );
+	if(!zResidualByz_1) {
+		std::cout<<"could not get fitted slices!";
+		return 0.;
+	}
+//	zResidualByz_1->Draw(""); gPad->Update(); std::cin.get();
+
+	std::cout<<"fit pol1 to slices!\n";
+	auto projectionx=zResidualByz->ProjectionX();	//fit only to core, get from projection
+	TF1* line=new TF1("line","pol1(0)", projectionx->GetMean()-projectionx->GetStdDev(), projectionx->GetMean()+projectionx->GetStdDev() );
+	auto fitResult=zResidualByz_1->Fit(line, "SQ");
+//	gPad->Update(); std::cin.get();
+//	std::cout<<"fit result: "<<fitResult<<"\n";
+
+	auto slope=fitResult->Parameter(1);
+	return slope;
+}
+
+}
 
 void Alignment::updateShifts(TFile& file) {
 	quad.updateShift(file, "quad");
@@ -102,25 +151,22 @@ void Alignment::updateRotations(TFile& file) {
 }
 
 void Alignment::updateDriftSpeed(TFile& file) {
-	//calculate driftspeed
-	TTree* tree = getObjectFromFile<TTree>("fitResults", &file);
-	TH1* hist = getHistFromTree(tree, "hitAverage.z:laser.z",
-			"fabs(hitAverage.x)+fabs(hitAverage.y)>0", "driftprof(26,-0.5,25.5)", "prof goff");
-	if (hist->GetStdDev() > 5) {
-		auto fitResult = hist->Fit("pol1", "QS");
-		std::cout << "update drift speed by a factor " << fitResult->Parameter(1)
-				<< "\n";
-		driftSpeed.value /= fitResult->Parameter(1);
-	} else {
-		std::cout << "skipped updating drift speed\n";
-	}
+	auto slope=getDriftSpeedFactor(file,false);
+	driftSpeed.value *= (1-slope);
+	std::cout << "update drift speed by a factor " << (1-slope) <<"\n";
+}
+
+
+void Alignment::updateTimeWalk(TFile& file) {
+	TH2D* uncorrected=getObjectFromFile<TH2D>("quad/zResidualByToT", &file);
+	timeWalk.update(uncorrected);
 }
 
 void Alignment::updateAll(TFile& file) {
 	updateShifts(file);
 	updateRotations(file);
 
-	timeWalk.update(file);
+	updateTimeWalk(file);
 
 	updateDriftSpeed(file);
 }

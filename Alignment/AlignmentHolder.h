@@ -136,14 +136,20 @@ struct ShiftAndRotateAlignment : AlignmentHolder {
 		return hpos;
 	}
 	virtual Vec3 rotateBack(const Vec3& hpos) const {
+		return rotateBack(hpos, COM);
+	}
+	virtual Vec3 rotateBack(const Vec3& hpos, const Vec3& Center) const {
 		TVector3 Thpos=hpos; //convert to TVector3 and then call the same function
-		rotateBack(Thpos);
+		rotateBack(Thpos, TVector3(Center) );
 		return Thpos;
 	}
 	virtual TVector3& rotateBack(TVector3& hpos) const {
+		return rotateBack(hpos, COM);
+	}
+	virtual TVector3& rotateBack(TVector3& hpos, const TVector3& Center) const {
 		for(int i=2; i>=0; i--) {
 			const std::array<TVector3, 3> unitVectors={ TVector3{1,0,0}, TVector3{0,1,0}, TVector3{0,0,1} };
-			hpos=RotateAroundPoint(hpos, -rotation[i],COM, unitVectors[i]);
+			hpos=RotateAroundPoint(hpos, -rotation[i],Center, unitVectors[i]);
 		}
 		return hpos;
 	}

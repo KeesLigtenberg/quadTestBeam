@@ -87,6 +87,27 @@ void drawHitmap(std::string filename="tree.root", std::string treename="data") {
 	gPad->Update();
 	gPad->SetTicks(1,1);
 }
+
+
+void drawShiftedTrigger(std::string filename, std::string treename="data") {
+	auto tree=getObjectFromFile<TTree>(treename, filename);
+
+	//new TCanvas("shiftedTriggerCanvas", "Canvas for shiftedTrigger", 28*20,38*20);
+	//gStyle->SetOptStat(0);
+
+	HistogramCombiner comb("comb");
+
+	int nEntries=tree->GetEntries();
+	tree->SetMarkerStyle(7);
+	for(int j=0; j<nChips; j++) {
+		auto js=std::to_string(j);
+		auto h=getHistFromTree(*tree, "chip"+js+".nShiftedTrigger", "","",1E5);
+		comb.add(h, "chip "+js+";Shifted from trigger [409 #mus];Hits");
+	}
+	comb.createCombined();
+}
+
+
 /*
 
 void plotSpot( std::string filename="tree.root", std::string treename="data") {

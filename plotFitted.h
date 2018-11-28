@@ -7,6 +7,7 @@
 #include "TGaxis.h"
 #include "TTreeReader.h"
 #include "TTreeReaderArray.h"
+#include "TH3.h"
 
 #include "/user/cligtenb/rootmacros/getObjectFromFile.h"
 #include "/user/cligtenb/rootmacros/getHistFromTree.h"
@@ -26,7 +27,7 @@
 using namespace std;
 
 const int nChips=4;
-std::vector<std::string> chipDirectories={"chip1","chip2","chip3","chip4"};
+std::vector<std::string> chipDirectories={"chip0", "chip1","chip2","chip3"};
 std::vector<int> chipMapping={2,1,3,0};
 std::vector<int> chipReverseMapping={4,2,1,3};//for canv->cd
 
@@ -36,7 +37,7 @@ void drawChipEdges(std::string alignFile="../align.dat") {
 	gStyle->SetOptStat(0);
 }
 
-void combineHistogramsForChips(std::string histName="nHits", std::string fileName="fitted.root") {
+void combineHistogramsForChips(std::string histName="nHits", std::string fileName="combinedFit.root") {
 	HistogramCombiner combination(histName+"combination");
 	for(auto& directory : chipDirectories) {
 		auto hist=getObjectFromFile<TH1>(directory+"/"+histName, fileName);
@@ -218,13 +219,13 @@ void plotTimeWalkResiduals( std::string filename="fitted.root" ) {
 	TGaxis::SetMaxDigits(4);
 }
 
-void plotFittedTimeWalk(TH2* uncorrected) {
+TH1* plotFittedTimeWalk(TH2* uncorrected) {
 	uncorrected->FitSlicesY();
 	auto means=dynamic_cast<TH1*>( gDirectory->Get("zResidualByToT_1") );
-	if(!means) { cerr<<"failed to retrieve result from fitslicesy()\n"; return; };
+	if(!means) { cerr<<"failed to retrieve result from fitslicesy()\n"; return nullptr; };
 
 	//rebin means
-	{
+	if (false) {
 		auto hist=means;
 		std::vector<double> lowerEdges, contents, errors;
 		lowerEdges.push_back( hist->GetXaxis()->GetBinLowEdge(1));
@@ -252,13 +253,13 @@ void plotFittedTimeWalk(TH2* uncorrected) {
 	}
 	
 
-	double minToT=0.15;
+	double minToT=0.10;
 	auto simple=new TF1("2 parameters", "[c_{1}]/(x+[t_{0}])+[offset]", minToT,2.5);
 	
 	simple->SetParameters(0.366,0.066,0);
 	means->Fit(simple, "", "", minToT,2.5);
 	double offset=simple->GetParameter("offset");
-	means=shiftY(means, -simple->GetParameter("offset") );
+//	means=shiftY(means, -simple->GetParameter("offset") );
 
 	means->Draw();	
 	simple->SetParameters(0.366,0.066,0);
@@ -287,26 +288,30 @@ void plotFittedTimeWalk(TH2* uncorrected) {
 	stats->add("z_{offset}", offset, 3, "mm");
 	//stats->addChiSquare(*simple);
 	stats->draw();
+	return means;
 }
-void plotFittedTimeWalk( std::string filename="fitted.root", std::string object="zResidualByToT") {
+TH1* plotFittedTimeWalk( std::string filename="combinedFit.root", std::string object="quad/zResidualByToT") {
 	auto uncorrected=getObjectFromFile<TH2>(object, filename);
-	plotFittedTimeWalk(uncorrected);
+	return plotFittedTimeWalk(uncorrected);
 }
 //draw four timewalk on 4 pads in one canvas
-void combineFittedTimeWalkForChips(std::string filename="fitted.root", std::string object="zResidualByToT") {
+void combineFittedTimeWalkForChips(std::string filename="combinedFit.root", std::string object="zResidualByToT") {
 	auto canv=new TCanvas("canvas", "combined canvas", 1000,1000);
 	canv->Divide(2,2);
+	HistogramCombiner comb{"combinedTW"};
 	for(int i=0;i<4;i++) {
 		canv->cd(i+1);
-		plotFittedTimeWalk(filename, chipDirectories[i]+"/"+object);
+		auto h=plotFittedTimeWalk(filename, chipDirectories[i]+"/"+object);
+		comb.add(h, "chip "+to_string(i+1) );
 	}
+	comb.createCombined();
 }
 
 
 //fitSlicesY with specification of range
 TH1* fitDiffusionSlices(TH2* h2, std::string x="z") {
 	TF1* gaus=new TF1("gaus","gaus(0)", -2,2);
-	TF1* gausRange=new TF1("gausRange","gaus(0)", -1,1);
+	TF1* gausRange=new TF1("gausRange","gaus(0)", -0.6,0.6);
 	gausRange->SetParameters(4E4,0.05,0.22);
 	TF1* exGaus=new TF1("exGaus", "[c]*[l]/2*exp([l]/2*(2*[m]+[l]*[s]*[s]-2*x))*TMath::Erfc( ([m]+[l]*[s]*[s]-x)/sqrt(2)/[s] )", -2, 2); //Exponentially modified gaussian distribution (see wiki)
 	exGaus->SetParameters(2E4,3.1,-0.25,0.2); // Constant, Lambda, Mean, Sigma
@@ -346,7 +351,7 @@ TF1* fitDiffusion( TH2* h2 , std::string x="x", double z0=0, std::string canvnam
 	drift->SetParameter(0, 0.15);//sigma0
 
 	//add error to fit
-	h2_2=addErrorToHist(h2_2, 1E-3); //set all error bins equal
+//	h2_2=addErrorToHist(h2_2, 1E-3); //set all error bins equal
 	h2_2->Fit(drift, "", "", 0, 25);
 
 	gStyle->SetOptTitle(0);	
@@ -378,14 +383,16 @@ TF1* fitDiffusion( TH2* h2 , std::string x="x", double z0=0, std::string canvnam
 
 }
 
-void plotDiffusionFromHist(std::string filename="fitted.root") {
-	for(std::string chip : chipDirectories )
+void plotDiffusionFromHist(std::string filename="combinedFit.root", std::string histogramName="ResidualByz_locExp") {
+//	for(std::string chip : chipDirectories )
+	std::string chip="quad";
 	for(std::string x : {"x", "y", "z"}) {
-		TH1* h=getObjectFromFile<TH1>( chip+"/"+x+"ResidualByz", filename);
+		TH1* h=getObjectFromFile<TH1>( chip+"/"+x+histogramName, filename);
 		TH2* h2=dynamic_cast<TH2*>(h);
 		fitDiffusion(h2, x, 0, chip);
 	}
 }
+
 
 void plotDiffusionCombined(std::string filename="fitted.root") {
 	TH2D* histogram=nullptr;
@@ -399,11 +406,11 @@ void plotDiffusionCombined(std::string filename="fitted.root") {
 	}
 }
 
-void plotZResidualsByToT(std::string filename="fitted.root") {
+void plotZResidualsByToT(std::string filename="combinedFit.root", std::string histname="zResidualByToTCorrected") {
 	HistogramCombiner combination("ToTCombination");
 	TF1* gaus=new TF1("gaus","gaus(0)", -2,2);
 	for(std::string chip : chipDirectories ) {
-		TH2* h2=getObjectFromFile<TH2>( chip+"/zResidualByToT", filename);
+		TH2* h2=getObjectFromFile<TH2>( chip+"/"+histname, filename);
 
 		h2->FitSlicesY(gaus, 0/*firstbin*/, -1/*lastbin*/, 5/*min number of entries*/, "QNR");
 
@@ -427,6 +434,73 @@ TH1* plotSpot(std::string filename="fitted.root") {
 	gStyle->SetOptTitle(0);
 	return hist;
 }
+
+
+void plotSlicedDiffusionWithFit( std::string filename="combinedFit.root",  std::string object="quad/zResidualByzByToT_locExp" ) {
+	auto hist3=getObjectFromFile<TH3D>(object, filename);
+	auto zaxis=hist3->GetZaxis();
+
+	double z0=0;
+
+	//HistogramCombiner slices("slices");
+	std::vector<std::string> slicename = {"0.10 #mus < ToT < 0.30 #mus", "ToT > 0.30 #mus"};
+	std::vector<std::pair<double,double> > binRanges = { {5,13}, {14, zaxis->GetNbins()+1} };
+	std::vector<TH1*> histograms= { nullptr, nullptr };
+	auto stats=new StatsWrapper();
+	TF1* drift=new TF1("drift", "sqrt( pow([#sigma_{z0}],2) + pow([D],2)/10*(x-[z0]) )", 4.5, 23);;
+	TLegend* legend = new TLegend();
+	for(int i : {0,1} ) {
+		zaxis->SetRange(binRanges[i].first, binRanges[i].second);
+		auto proj=(TH2*)hist3->Project3D("yx");
+
+		auto hsigma=fitDiffusionSlices(proj, "z");
+
+		auto name="slice "+std::to_string(i);
+		histograms.at(i)=(TH1*)hsigma->Clone(name.c_str());
+
+		histograms.at(i)->GetXaxis()->SetTitle("z-position [mm]");
+		histograms.at(i)->GetYaxis()->SetTitle("#sigma_{z} from fit to track-residual [mm]" );
+		//increaseAxisSize(histograms.at(i), 0.05);
+		//histograms.at(i)->GetYaxis()->SetRangeUser(0,0.45);
+		//histograms.at(i)->GetXaxis()->SetRangeUser(z0,23);
+
+		legend->AddEntry(histograms.at(i), (slicename.at(i)+" ("+to_string_precision(proj->GetEntries()/hist3->GetEntries()*100,0)+"%)" ).c_str() );
+
+		cout<<proj->GetEntries()<<" entries\n";
+
+		//slices.add(clone,slicename.at(i)+";z-position [mm];#sigma_{z} from fit to track-residual [mm]");//+" ("+std::to_string(int(proj->GetEntries()/1000000+0.49))+"M hits)");
+
+		if(i==1) {
+			auto driftParams=fitDiffusion(proj, "rx", z0);
+			//cin.get();
+			stats->add( "D_{L}",  driftParams->GetParameter(1)*1E3, 0, "#mum/#sqrt{cm}" );
+			stats->add( "#sigma_{z0}" ,  driftParams->GetParameter(0)*1E3, 0, "#mum" );
+			stats->add( "z0 (fixed)" ,  driftParams->GetParameter(2), 2, "mm" );
+
+			for(int j=0; j<4; j++) {
+				drift->SetParameter(j, driftParams->GetParameter(j));
+			}
+		}
+	}
+
+	changeLegendStyle(legend, 1, 0.055);
+
+	//new TCanvas();
+	//drift->Draw();
+	histograms[0]->SetLineColor(kGreen+2);
+	histograms[0]->Draw("same");
+	histograms[1]->Draw("same");
+	legend->Draw();
+
+	//slices.setStyle(10);slices.titleSize=0.05;
+	//slices.setYRange({0,0.6});
+	//slices.createCombined();
+
+	stats->draw();
+	//gPad->SetMargin(0.15,0.1,0.15,0.1);
+
+}
+
 
 
 /*

@@ -19,6 +19,26 @@ namespace {
 		return h;
 	}
 
+	std::vector<PositionHit>& calculateResidualTimepix(std::vector<PositionHit>& quadHits,
+				const FitResult3D& fit) {
+		for (auto& h : quadHits) {
+			h = calculateResidualTimepix(h, fit);
+		}
+		return quadHits;
+	}
+
+	bool matchByAverage(std::vector<PositionHit>& quadHits,
+			const FitResult3D& fit) {
+		//matchin by simple average
+		auto avPosition = getAveragePosition(quadHits);
+		bool matched=false;
+		if (std::fabs(avPosition.x() - fit.xAt(avPosition.y())) < 2
+				&& std::fabs(avPosition.z() - fit.yAt(avPosition.y())) < 2) {
+			matched = true;
+		}
+		return matched;
+	}
+
 }
 
 TrackCombiner::TrackCombiner(std::string quadFile, std::string telescopeFile, Alignment& alignment) :
@@ -59,6 +79,7 @@ void TrackCombiner::openFile(std::string outputFileName) {
 
 }
 
+
 void TrackCombiner::Process() {
 	//match entries
 	nTelescopeTriggers=0;
@@ -97,18 +118,42 @@ void TrackCombiner::Process() {
  		const int minHitsPerChip=10;
  		if( (nHitsPerChip[0] <minHitsPerChip or nHitsPerChip[1] <minHitsPerChip) and (nHitsPerChip[2]<minHitsPerChip or nHitsPerChip[3]<minHitsPerChip ) ) continue;
 
+// 		for(auto& h : quadHits) flagShiftedTrigger(h,4); //max shifted
 
  		std::vector<FitResult3D> telescopeFits=telescopeFitter.getFits(telescopeHits);
 
 
- 		auto avPosition=getAveragePosition(quadHits);
  		bool matched=false;
+ 		FitResult3D* fittedTrack=nullptr; //todo: save element of array, because if reallocation happens, this pointer is invalidated!
  		for(auto&f : telescopeFits) {
- 			if( std::fabs( avPosition.x()-f.xAt( avPosition.y()) )<2 and std::fabs( avPosition.z()-f.yAt(avPosition.y()) )<2 ) {
- 				matched=true;
- 				for(auto& h : quadHits) {
- 					h=calculateResidualTimepix(h, f);
- 				}
+
+ 			//match by calculating number of hits in range
+ 			const bool matchByResidual=true;
+ 			if(matchByResidual) {
+ 	 			auto quadHitsWithResidual=quadHits; //copy hits!
+				for(auto& h : quadHitsWithResidual) {
+					h=calculateResidualTimepix(h,f);
+					h=flagResidual(h,{1.5,1.5,3});
+				}
+				auto nHits=getHitsPerChip(quadHitsWithResidual, true);
+				int nTotalHits=std::accumulate(nHits.begin(), nHits.end(), 0);
+				if(nTotalHits>20) {
+					auto avPosition = getAveragePosition(quadHitsWithResidual,true);
+					if (std::fabs(avPosition.x() - f.xAt(avPosition.y())) < 0.3 ) {
+						matched = true;
+						fittedTrack=&f;
+						quadHits=quadHitsWithResidual;
+						break;
+					} else if(drawEvent) std::cout<<"More than 20 chips along track, but average position did not match!\n";
+				} else if(drawEvent and nTotalHits) std::cout<<nTotalHits<<" is less than 20 hits along track!\n";
+ 			} else {
+ 			//matchin by simple average
+				if( matchByAverage(quadHits, f) ) {
+					matched=true;
+					quadHits=calculateResidualTimepix(quadHits,f);
+					fittedTrack=&f;
+					break;
+				}
  			}
  		}
 // 		if(!matched) continue;
@@ -117,17 +162,23 @@ void TrackCombiner::Process() {
  		if(matched) {
  			for(auto& h : quadHits) {
  				if(h.flag!=PositionHit::Flag::valid) continue;
- 				hists[h.chip]->fillTimewalk(h, alignment.timeWalk);
- 				quadHist->fillTimewalk(h, alignment.timeWalk);
-
  				hists[h.chip]->fillHit(h);
  				hists[h.chip]->fillRotation(h, alignment.chips[h.chip].getCOMGlobal());
  				quadHist->fillHit(h);
  				quadHist->fillRotation(h, alignment.quad.getCOMGlobal());
+
  				auto localPosition=alignment.quad.rotateAndShiftBack(h.position);
- 				auto localResidual=alignment.quad.rotateBack(h.residual);
- 				hists[h.chip]->local.fill( localPosition, localResidual );
- 				quadHist->local.fill( localPosition, localResidual );
+ 				auto expectedPosition = Vec3{ fittedTrack->xAt(h.position.y), h.position.y, fittedTrack->yAt(h.position.y)}; //telescope->timepix frame!
+ 				auto localExpectedPosition=alignment.quad.rotateAndShiftBack(expectedPosition);
+ 				auto localResidual=alignment.quad.rotateBack(h.residual, {0,0,0});
+
+ 				hists[h.chip]->fillTimewalk(localResidual.z, h.ToT, alignment.timeWalk);
+ 				quadHist->fillTimewalk(localResidual.z, h.ToT, alignment.timeWalk);
+
+ 				hists[h.chip]->local.fill( localPosition, localResidual, h.ToT);
+ 				quadHist->local.fill( localPosition, localResidual, h.ToT );
+ 				quadHist->locExp.fill(localExpectedPosition, localResidual, h.ToT);
+ 				hists[h.chip]->locExp.fill( localExpectedPosition, localResidual, h.ToT );
  			}
  		}
 
@@ -137,7 +188,7 @@ void TrackCombiner::Process() {
 		}
 		quadHist->fillEvent();
 
-		if(drawEvent && matched) {
+		if(drawEvent and matched) {
 			//		SimpleDetectorConfiguration setupForDrawing { 0,30 /*x*/, 0,42 /*y beam*/, -20,20/*z drift*/};
 			auto setupForDrawing=simpleDetectorFromChipCorners(alignment.getAllChipCorners());
 			setupForDrawing.minz=-10, setupForDrawing.maxz=30;
@@ -147,17 +198,21 @@ void TrackCombiner::Process() {
 //			telescopeFitter.drawEvent(telescopeHits,telescopeFits);
 	//		HoughTransformer::drawClusters(telescopeHits, setupForDrawing);
 
-			std::cout<<"draw quad hits "<<quadHits.size()<<"\n";
-			HoughTransformer::drawCluster(quadHits,setupForDrawing);
-			for (auto& f : telescopeFits)
-				f.draw( setupForDrawing.ymin(), setupForDrawing.ymax() );
-			drawQuadOutline(alignment, setupForDrawing.zmin() );
+			std::cout<<"draw "<< (matched?"matched":"") <<" quad hits "<<quadHits.size()<<"\n";
 
-			//2D
-//			drawCluster2D(quadHits,setupForDrawing);
-//			alignment.drawChipEdges();
-//			for (auto& f : telescopeFits)
-//				f.XZ.draw( setupForDrawing.ymin(), setupForDrawing.ymax() );
+			//3D
+			if(false) {
+				HoughTransformer::drawCluster(quadHits,setupForDrawing);
+				for (auto& f : telescopeFits)
+					f.draw( setupForDrawing.ymin(), setupForDrawing.ymax() );
+				drawQuadOutline(alignment, setupForDrawing.zmax() );
+			} else {
+				//2D
+				drawCluster2D(quadHits,setupForDrawing);
+				alignment.drawChipEdges();
+				for (auto& f : telescopeFits)
+					f.XZ.draw( setupForDrawing.ymin(), setupForDrawing.ymax() );
+			}
 
 
 			gPad->Update();
@@ -166,7 +221,7 @@ void TrackCombiner::Process() {
 
 		if(outputTree) {
 			currentEntry.telescopeFits=telescopeFits;
-			currentEntry.meanQuadPosition=getAveragePosition(quadHits);
+			currentEntry.meanQuadPosition=getAveragePosition(quadHits, {PositionHit::Flag::shiftedTrigger});
 			currentEntry.nHitsPerChip=nHitsPerChip;
 			currentEntry.quadHits=quadHits;
 			currentEntry.matched=matched;
@@ -178,17 +233,25 @@ void TrackCombiner::Process() {
 		}
 
 	}
-	outputTree->Draw("XZ.intercept+XZ.slope*172:x");
-	new TCanvas();
-	outputTree->Draw("YZ.intercept+YZ.slope*172:z", "fabs(XZ.intercept+XZ.slope*172-x)<3");
+	std::cout<<"\ndone!\n";
+
+	if(not drawEvent) {
+		static TCanvas* xCorrelation= new TCanvas();
+		xCorrelation->cd();
+		outputTree->Draw("XZ.intercept+XZ.slope*172:x", "", "", 5E4);
+		static TCanvas* yCorrelation= new TCanvas();
+		yCorrelation->cd();
+		outputTree->Draw("YZ.intercept+YZ.slope*172:z", "fabs(XZ.intercept+XZ.slope*172-x)<3", "", 5E4);
+	}
 }
 
 void TrackCombiner::printTriggers(int telescopeEntry, int tpcEntry) {
-	const int printEveryN=1000;
+	const int printEveryN=100;
+	using namespace std;
 	if( !(telescopeEntry%printEveryN) ) {
 		cout<<"entry: "<<telescopeEntry<<"/"<<telescopeFitter.nEvents<<" ";
 		cout<<"triggers: "<<telescopeFitter.triggerNumberBegin<<"-"<<telescopeFitter.triggerNumberEnd;
-		cout<<" timepix triggerNumber: "<<quadFitter.triggerNumber()<<"="<<(quadFitter.triggerNumber()+triggerOffset) % 32768<<" in entry "<<tpcEntry<<endl;
+		cout<<" timepix triggerNumber: "<<quadFitter.triggerNumber()<<"="<<(quadFitter.triggerNumber()+triggerOffset) % 32768<<" in entry "<<tpcEntry<<"\r"<<flush;
 	}
 }
 
@@ -197,7 +260,8 @@ TrackCombiner::MatchResult TrackCombiner::getAndMatchEntries(
 		int& tpcStartEntry) {
 
 	static bool printMatching = false;
-//	if(telescopeEntry>70E3) printMatching=true;
+//	if(telescopeEntry>800) printMatching=true;
+//	if(telescopeEntry>805) printMatching=false;
 
 	if(printMatching) std::cout<<"starting getAndMatchEntries( "<<telescopeEntry<<", "<<tpcStartEntry<<")\n";
 
@@ -242,13 +306,13 @@ TrackCombiner::MatchResult TrackCombiner::getAndMatchEntries(
 //		triggerStatusHistogram.Fill("Trigger numbers do not match", 1);
 
 //		frameStatusHistogram.reset();
-		nTelescopeTriggers+=max(0,telescopeFitter.triggerNumberEnd-previousTriggerNumberEnd);
+		nTelescopeTriggers+=std::max(0,telescopeFitter.triggerNumberEnd-previousTriggerNumberEnd);
 
 		previousTriggerNumberBegin=telescopeFitter.triggerNumberBegin;
 		previousTriggerNumberEnd=telescopeFitter.triggerNumberEnd;
 		if( !telescopeFitter.getEntry(++telescopeEntry) ) return MatchResult::end;
 
-		if(printMatching)		cout<<"increased telescopeEntry, first time pix match was: "<<timepixEntryFirstMatch<<endl;
+		if(printMatching)		std::cout<<"increased telescopeEntry, first time pix match was: "<<timepixEntryFirstMatch<<std::endl;
 
 		tpcStartEntry=timepixEntryFirstMatch;
 		hadFirstMatch=false;

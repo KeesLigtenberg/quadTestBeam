@@ -20,7 +20,7 @@ void combineTracks(std::string quad, std::string mimosa, bool draw=false) {
 
 	if(hits.size() ) for(auto& h : hits[0]) std::cout<<h.ToT;
 
-	tc.openFile("combinedFit.root");
+	tc.openFile(draw ? "tmp.root" : "combinedFit.root");
 	tc.Process();
 }
 
@@ -31,13 +31,13 @@ void updateAlignmentFromFile(std::string resultFile="combinedFit.root", std::str
 	alignment.updateShifts(file);
 //		alignment.quad.updateShift(file,"quad",2);
 	alignment.updateRotations(file);
-//		alignment.timeWalk.update(file);
-//		alignment.updateDriftSpeed(file);
+//		alignment.updateTimeWalk(file);
+		alignment.updateDriftSpeed(file);
 		alignment.write("align.dat");
 }
 
 void combineTracksAndUpdateAlignment(std::string quad, std::string mimosa, int nIterations=3) {
-	for(int i=0; i<3; i++) {
+	for(int i=0; i<nIterations; i++) {
 		combineTracks(quad, mimosa);
 		updateAlignmentFromFile();
 	}

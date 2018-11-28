@@ -83,6 +83,7 @@ public:
 
 	struct TreeEntry {
 		std::vector<Hit> chips[4]{};
+		std::vector<int> nHitsShifted[4]{};
 		long long triggerToA=0;
 		unsigned triggerNumber=0;
 	};
@@ -109,6 +110,17 @@ private:
 
 	void Fill(const TreeEntry& entry){
 		currentEntry=entry;
+
+		//count number of hits/chip/shift
+		for(int i=0; i<4;i++) {
+			for(int j=0; j<20; j++) {
+				currentEntry.nHitsShifted[i].emplace_back( std::count_if(
+					currentEntry.chips[i].begin(), currentEntry.chips[i].end(), [&j](const Hit& h){
+						return h.nShiftedTrigger==j;
+					}));
+			}
+		}
+
 		tree.Fill();
 	}
 	void setTreeBranches();
@@ -117,8 +129,10 @@ private:
 inline void BufferedTreeFiller::setTreeBranches() {
 	tree.Branch( "triggerToA", &currentEntry.triggerToA );
 	tree.Branch( "triggerNumber", &currentEntry.triggerNumber );
-	for(int i=0; i<4; i++)
+	for(int i=0; i<4; i++) {
 		tree.Branch( ("chip"+std::to_string(i)).c_str() , "std::vector<Hit>", currentEntry.chips+i);
+		tree.Branch( ("nHitsShifted"+std::to_string(i)).c_str(), "std::vector<int>", currentEntry.nHitsShifted+i);
+	}
 }
 
 

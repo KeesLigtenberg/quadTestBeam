@@ -20,7 +20,7 @@ struct PositionHit : Hit{
 	unsigned char chip;
 	Vec3 residual{}, error{1,1,1};
 
-	enum class Flag : int {valid=1, highResidualxy=-1, highResidualz=-3, lowToT=-2, smallz=-4, debug=-5} flag=Flag::valid;
+	enum class Flag : int {valid=1, highResidualxy=-1, highResidualz=-3, lowToT=-2, smallz=-4, debug=-5, shiftedTrigger=-6} flag=Flag::valid;
 
 
 	void RotatePosition(double rotation, const TVector3& rotationPoint, const TVector3& rotationAxis) {
@@ -36,10 +36,11 @@ struct PositionHit : Hit{
 
 
 template< class Container=std::vector<PositionHit> >
-Container convertHitsTPC(const std::vector<Hit>& hv, unsigned char chip, double driftSpeed, double pixelwidth=0.055, double pixelheight=0.055 ) {
+Container convertHitsTPC(const std::vector<Hit>& hv, unsigned char chip, double driftSpeed, double t0Offset, double pixelwidth=0.055, double pixelheight=0.055 ) {
 		Container phv;
-		for(auto& h : hv) {
+		for(auto h : hv) {
 			// .5 to center position in pixel, removed?
+			h.driftTime-=t0Offset;
 			phv.emplace_back(
 					PositionHit{ (h.column)*pixelwidth/*x*/, (h.row)*pixelheight /*y*/,h.driftTime*driftSpeed /*z*/, chip, h }
 			);
@@ -80,6 +81,14 @@ PositionHit& flagResidualPull(PositionHit& h, const TVector3& maxResidualPull) {
 	return h;
 }
 
+PositionHit& flagShiftedTrigger(PositionHit& h, int maxShift=0) {
+	if(h.nShiftedTrigger>maxShift) {
+		h.flag = PositionHit::Flag::shiftedTrigger;
+	}
+	return h;
+}
+
+
 template<class Container>
 TVector3 getAveragePosition(Container hv, bool rejectFlagged=false) {
 	TVector3 sum(0,0,0);
@@ -92,6 +101,20 @@ TVector3 getAveragePosition(Container hv, bool rejectFlagged=false) {
 	sum*=(1./n);
 	return sum;
 }
+
+template<class Container>
+TVector3 getAveragePosition(Container hv, std::set<PositionHit::Flag> rejectFlags) {
+	TVector3 sum(0,0,0);
+	int n=0;
+	for(const PositionHit& hit : hv) {
+		if( rejectFlags.find(hit.flag)!=rejectFlags.end() ) continue;
+		sum+=hit.position;
+		n++;
+	}
+	sum*=(1./n);
+	return sum;
+}
+
 
 std::vector<int> getHitsPerChip(std::vector<PositionHit> hits, bool rejectFlagged=false) {
 	std::vector<int> nHits(4);

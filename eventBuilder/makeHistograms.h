@@ -55,6 +55,10 @@ void makeHistograms(std::string inputFileName, std::string outputFileName) {
 	int stepSizeUs=5;
 	unsigned triggerWindow=triggerWindowUs*1E3/25*4096; //to stepsize units
 	TH1D triggerTime("triggerTime", "Trigger time offset;t - trigger time [us];Entries", triggerWindowUs/stepSizeUs, -triggerWindowUs/2,triggerWindowUs/2);
+	std::vector<std::unique_ptr<TH1D>> triggerTimeOffsetChip;
+	for(int i=0; i<nChips; i++) {
+		triggerTimeOffsetChip.emplace_back( new TH1D(("triggerTimeOffsetChip"+std::to_string(i)).c_str(), "Trigger time offset;t - trigger time [us];Entries", triggerWindowUs/stepSizeUs, -triggerWindowUs/2,triggerWindowUs/2 ) );
+	}
 	const int nBits=64;
 	TProfile2D triggerBitsByTime("triggerBitsByTime", "Trigger time offset;t - trigger time [us];trigger bits", triggerWindowUs/stepSizeUs, -triggerWindowUs/2,triggerWindowUs/2, nBits, 0.5,nBits+.5);
 	TProfile2D hitTimeBitsByTime("hitTimeBitsByTime", "Hit time time offset;t - trigger time [us];trigger bits", triggerWindowUs/stepSizeUs, -triggerWindowUs/2,triggerWindowUs/2, nBits, 0.5,nBits+.5);
@@ -82,7 +86,7 @@ void makeHistograms(std::string inputFileName, std::string outputFileName) {
 			std::cout<<"frame "<<frame<<" saved "<<outputTrees.triggerNumber<<"\r"<<std::flush;
 			if(!(frame%1000000)) {  std::cout<<"\nforcing autosave..\n"; outputTrees.tree.AutoSave();}
 		}
-		if( frame > 1E6  ) break;
+//		if( frame > 10E6  ) break;
 
 		//read triggers
 		while(triggers.size() and triggers.front().toa< t -triggerWindow/2) triggers.pop_front();
@@ -151,6 +155,15 @@ void makeHistograms(std::string inputFileName, std::string outputFileName) {
 			if(std::cin.get()=='q') break;
 
 		}
+		for(int i=0; i<4; i++) {
+			if(nHits[i]>30) {
+				for(auto& iTrigger : triggers) {
+	//				std::cout<<(t-iTrigger.toa)*0.025/4096<<"\n";
+					triggerTimeOffsetChip[i]->Fill( int(t-iTrigger.toa)*0.025/4096 ); //in us
+				}
+			}
+		}
+
 		outputTrees.clear();
 
 //		if(nHits>200){

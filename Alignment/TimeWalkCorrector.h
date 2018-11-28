@@ -28,10 +28,6 @@ public:
 	double getCorrection(double ToT) const;
 
 	void update(TH2D* zResidualByToT);
-	void update(TFile& file) {
-		TH2D* uncorrected=getObjectFromFile<TH2D>("zResidualByToT", &file);
-		update(uncorrected);
-	}
 
 	void writeParameters(std::ostream&);
 	void readParameters(std::istream&);
@@ -48,6 +44,7 @@ private:
 
 double TimeWalkCorrector::getCorrection(double ToT) const {
 	ToT*=0.025;
+	if(ToT<minToT) ToT=minToT;
 	if(fun)	return fun->Eval(ToT);
 	else {
 		std::cerr<<"error: function was not defined!\n";
@@ -67,7 +64,7 @@ std::vector<PositionHit>& TimeWalkCorrector::correct(std::vector<PositionHit>& s
 }
 PositionHit&  TimeWalkCorrector::correct(PositionHit& h) const {
 	if(h.ToT/40.<minToT) {h.flag=PositionHit::Flag::lowToT;};
-	h.position.z=h.position.z-getCorrection(h.ToT);
+	h.position.z=h.position.z-getCorrection( h.ToT );
 	return h;
 }
 
@@ -109,18 +106,22 @@ void TimeWalkCorrector::readParameters(std::istream& input) {
 }
 
 void TimeWalkCorrector::update(TH2D* th2) {
-	th2->FitSlicesY();
+	TF1* gausRangeTW=new TF1("gausRangeTW","gaus(0)", -5,5);
+	gausRangeTW->SetParameters(4E4,0.05,0.22);
+	th2->FitSlicesY(gausRangeTW,0,-1,5);
 	std::string meanHistName=th2->GetName()+std::string("_1");
 	auto means=dynamic_cast<TH1*>( gDirectory->Get(meanHistName.c_str()) );
 	if(!means) { std::cerr<<"failed to retrieve result from fitslicesy()\n"; return; };
 
-	means->Fit(fun.get(), "QS", "", minToT,2.5);
+//	means->Fit(fun.get(), "QS", "", 0,2.5);
+	means->Fit(fun.get(), "QS", "", minToT, 2.5);
 	if(fun->GetNpar()!= int(params.size())) {std::cerr<<"number of parameters in fit and in file does not match!\n"; return; };
 	params[0]=1; //first parameter is offset, so set to zero!
 	for(int i=1; i<fun->GetNpar(); i++) {
 		std::cout<<"update parameter "<<fun->GetParName(i)<<" from "<<params[i]<<" to "<<fun->GetParameter(i)<<"\n";
 		params[i]=fun->GetParameter(i);
 	}
+	gPad->Update(); std::cin.get();
 }
 
 

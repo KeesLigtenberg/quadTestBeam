@@ -15,6 +15,7 @@ d * buildEvent.h
 #include <memory>
 #include <algorithm>
 #include <deque>
+#include <list>
 
 #include "TTree.h"
 #include "TH1.h"
@@ -193,11 +194,12 @@ struct BufferedTriggerReader {
 	TriggerTreeReader reader;
 
 	TriggerTreeReader::Trigger nextTrigger{};
-	std::deque<TriggerTreeReader::Trigger> buffer{};
+	std::set<TriggerTreeReader::Trigger, std::function<bool(const TriggerTreeReader::Trigger&, const TriggerTreeReader::Trigger&)> >
+		buffer{ [](const TriggerTreeReader::Trigger& a, const TriggerTreeReader::Trigger& b) { return	a.toa < b.toa; } };
 
 	bool firstTrigger=true;
-	unsigned triggerShift=409.6/0.025*4096;
-	int maxTimesShifted=4;
+	unsigned long long triggerShift=409.6/0.025*4096;
+	int maxTimesShifted=500;
 
 	unsigned& currentEntry = reader.currentEntry;
 	const unsigned& nEntries = reader.nEntries;
@@ -209,15 +211,16 @@ struct BufferedTriggerReader {
 			nextTrigger=reader.getNextTriggerForced();
 			firstTrigger=false;
 		}
-		if( (buffer.empty() or nextTrigger.toa<buffer.front().toa) and not reader.reachedEnd() ) { //real trigger is first
+//		auto triggerIt=std::min_element(buffer.begin(), buffer.end(), [](const TriggerTreeReader::Trigger& a, const TriggerTreeReader::Trigger& b){return a.toa<b.toa;});
+		auto triggerIt=buffer.begin();
+		if( (buffer.empty() or nextTrigger.toa < triggerIt->toa) and not reader.reachedEnd() ) { //real trigger is first
 			for(int i=1; i<=maxTimesShifted; i++) {
-				buffer.push_back( TriggerTreeReader::Trigger{nextTrigger.toa+i*triggerShift, nextTrigger.number, i} );
+				buffer.insert( TriggerTreeReader::Trigger{nextTrigger.toa+i*triggerShift, nextTrigger.number, i} );
 			}
 			auto trigger=nextTrigger;
 			nextTrigger=reader.getNextTriggerForced();
 			return trigger;
 		} else { //repeated trigger is first
-			auto triggerIt=std::min_element(buffer.begin(), buffer.end(), [](const TriggerTreeReader::Trigger& a, const TriggerTreeReader::Trigger& b){return a.toa<b.toa;});
 			auto trigger=*triggerIt;
 			buffer.erase(triggerIt);
 			return trigger;
@@ -254,19 +257,19 @@ struct CombinedTreeWriter {
 
 struct bitHistogrammer{
 
-	auto nBits=64;
+	int nBits=64;
 	TProfile2D hitTimeBitsByShift{"hitTimeBitsByShift", ";trigger bits;shifted",
 			nBits, 0.5,nBits+.5, 5, -0.5, 4.5};
 	TProfile2D hitTimeBitsByDriftTime{"hitTimeBitsByDriftTime", ";drifTime;toa bits",
 			640,-500,500, nBits, 0.5,nBits+.5};
 
-	auto nBitsRow=8;
+	int nBitsRow=8;
 	TProfile2D rowBitsByShift{"rowBitsByShift", ";row bits;shifted",
 			nBitsRow, 0.5,nBitsRow+.5, 5, -0.5, 4.5};
-	auto nBitsCol=8;
+	int nBitsCol=8;
 	TProfile2D colBitsByShift{"colBitsByShift", ";column bits;shifted",
 			nBitsRow, 0.5,nBitsCol+.5, 5, -0.5, 4.5};
-	auto nBitsToT=10;
+	int nBitsToT=10;
 	TProfile2D totBitsByShift{"totBitsByShift", ";tot bits;shifted",
 			nBitsRow, 0.5,nBitsToT+.5, 5, -0.5, 4.5};
 
@@ -327,14 +330,15 @@ void convertToTree(std::string inputFileName, std::string outputFileName) {
 			if(e.description=="wrong zero!") { std::cout<<e.description<<"\n"; continue; }
 			else throw e;
 		}
-		if(!(trigger.number%10000)) {
-			std::cout<<trigger.number<<" at time "<<trigger.toa<<"\n";
-			std::cout<<"trigger reader entry: "<<triggerReader.currentEntry<<"/"<<triggerReader.nEntries<<"\n";
-			std::cout<<"chip 0 reader entry: "<<chips[0]->currentEntry<<"/"<<chips[0]->nEntries<<"\n";
-		}
-		if(trigger.number>1000000) break;
+//		if(!(trigger.number%10000)) {
+//			std::cout<<trigger.number<<" at time "<<trigger.toa<<" ("<<trigger.nShifted<<")\n";
+//			std::cout<<"trigger reader entry: "<<triggerReader.currentEntry<<"/"<<triggerReader.nEntries<<"\n";
+//			std::cout<<"chip 0 reader entry: "<<chips[0]->currentEntry<<"/"<<chips[0]->nEntries<<"\n";
+//		}
+		if(!(trigger.number%10000) && !trigger.nShifted) { std::cout<<"entry "<<trigger.number<<"\r"<<std::flush; }
+		if(trigger.number>1E5) break;
 
-		const unsigned triggerTimeShift=409.6/0.025*4096;//409.6/0.025*4096;
+		const unsigned triggerTimeShift=0;//409.6/0.025*4096;//409.6/0.025*4096;
 		trigger.toa+=triggerTimeShift;
 
 		auto& currentEntry=outputTrees.getEntry(trigger.number);
@@ -348,29 +352,15 @@ void convertToTree(std::string inputFileName, std::string outputFileName) {
 			auto& c = chips[i];
 			c->discardEntriesBeforeT(trigger.toa-maxTimeBeforeTrigger);
 			while(c->toa < trigger.toa+maxTimeAfterTrigger and not c->reachedEnd()) {
-				currentEntry.chips[i].emplace_back(c->row, c->col, c->tot, c->toa-trigger.toa );
+				currentEntry.chips[i].emplace_back(c->row, c->col, c->tot, c->toa-trigger.toa, trigger.nShifted );
 
 				c->getNextEntry();
 			}
 		}//for chips
 
-		//fill tree if enough hits
-		if( //not trigger.nShifted or
-				currentEntry.chips[0].size() + currentEntry.chips[1].size() > 70 or currentEntry.chips[2].size() + currentEntry.chips[3].size() > 70) {
-			if( trigger.nShifted ) {
-				nTriggerShifted++;
-			} else {
-				nTriggersUnshifted++;
-			}
-//			std::cout<<"trigger "<<trigger.number<<" at "<<(trigger.toa/4096.*25E-6-9.49436e+06)<<" ms shifted "<<trigger.nShifted<<" times with "<<outputTrees.chips[0].size()<<", "<<outputTrees.chips[1].size()<<", "<<outputTrees.chips[2].size()<<", "<<outputTrees.chips[3].size()<<" hits \n";
 
-			outputTrees.emptyBuffer(); //in order to mimic old behaviour, simply empty buffer after each entry
-//			const int maxEntriesInBuffer=100;
-//			outputTrees.emptyBufferUpTo(trigger.number-100);
-		}//if enough hits
-		else {
-			outputTrees.removeFromBuffer(trigger.number);
-		}
+		const int maxEntriesInBuffer=100*triggerReader.maxTimesShifted;
+		outputTrees.emptyBufferUpTo(trigger.number-maxEntriesInBuffer);
 
 	} //while(not end)
 
