@@ -77,6 +77,12 @@ void TrackCombiner::openFile(std::string outputFileName) {
 	}
 	quadHist=std::unique_ptr<ChipHistogrammer>( new ChipHistogrammer("quad", alignment) );
 
+	auto top=gDirectory;
+	top->mkdir("eventCuts")->cd();
+	selectedHitAverageToTrackx=std::unique_ptr<TH1D>( new TH1D("selectedHitAverageToTrackx", "distance from average of selected hits to track;Distance [mm];Entries", 100,-1,1) );
+	fractionInTrack=std::unique_ptr<TH1D>( new TH1D("fractionInTrack", "fraction of hits in track divided by hits in larger window;Fraction;Entries", 100,0,1) );
+	top->cd();
+
 }
 
 
@@ -89,7 +95,7 @@ void TrackCombiner::Process() {
 
 
 	for(int telescopeEntryNumber=0,tpcEntryNumber=0; //5000000, 2308829
-			telescopeEntryNumber<1E5 //telescopeFitter.nEvents//1000000
+			telescopeEntryNumber<telescopeFitter.nEvents//1000000
 			;) {
 //		triggerStatusHistogram.reset();
 
@@ -118,7 +124,7 @@ void TrackCombiner::Process() {
  		const int minHitsPerChip=10;
  		if( (nHitsPerChip[0] <minHitsPerChip or nHitsPerChip[1] <minHitsPerChip) and (nHitsPerChip[2]<minHitsPerChip or nHitsPerChip[3]<minHitsPerChip ) ) continue;
 
-// 		for(auto& h : quadHits) flagShiftedTrigger(h,4); //max shifted
+ 		for(auto& h : quadHits) flagShiftedTrigger(h,4); //max shifted
 
  		std::vector<FitResult3D> telescopeFits=telescopeFitter.getFits(telescopeHits);
 
@@ -135,11 +141,23 @@ void TrackCombiner::Process() {
 					h=calculateResidualTimepix(h,f);
 					h=flagResidual(h,{1.5,1.5,3});
 				}
-				auto nHits=getHitsPerChip(quadHitsWithResidual, true);
-				int nTotalHits=std::accumulate(nHits.begin(), nHits.end(), 0);
+				int nTotalHits=countTotalValidHits(quadHitsWithResidual);
 				if(nTotalHits>20) {
+
+					//fraction
+					int nSideBandHits=std::count_if(quadHitsWithResidual.begin(), quadHitsWithResidual.end(), [](const PositionHit& h) {
+						return h.flag==PositionHit::Flag::valid or ( (h.flag==PositionHit::Flag::highResidualxy or h.flag==PositionHit::Flag::highResidualz) and fabs(h.residual.x)<5);
+					});
+					double fraction=double(nTotalHits)/nSideBandHits;
+					fractionInTrack->Fill(fraction);
+
+					//average pos
 					auto avPosition = getAveragePosition(quadHitsWithResidual,true);
-					if (std::fabs(avPosition.x() - f.xAt(avPosition.y())) < 0.3 ) {
+					double averageDist=avPosition.x() - f.xAt(avPosition.y()) ;
+					selectedHitAverageToTrackx->Fill(averageDist);
+
+					if(drawEvent) std::cout<<"dist "<<averageDist<<" frac "<<fraction<<"\n";
+					if ( std::fabs(averageDist) < 0.3 && fraction>0.8 ) {
 						matched = true;
 						fittedTrack=&f;
 						quadHits=quadHitsWithResidual;
@@ -188,7 +206,7 @@ void TrackCombiner::Process() {
 		}
 		quadHist->fillEvent();
 
-		if(drawEvent and matched) {
+		if(drawEvent) {
 			//		SimpleDetectorConfiguration setupForDrawing { 0,30 /*x*/, 0,42 /*y beam*/, -20,20/*z drift*/};
 			auto setupForDrawing=simpleDetectorFromChipCorners(alignment.getAllChipCorners());
 			setupForDrawing.minz=-10, setupForDrawing.maxz=30;
@@ -201,7 +219,8 @@ void TrackCombiner::Process() {
 			std::cout<<"draw "<< (matched?"matched":"") <<" quad hits "<<quadHits.size()<<"\n";
 
 			//3D
-			if(false) {
+			const bool draw3D=true;
+			if(draw3D) {
 				HoughTransformer::drawCluster(quadHits,setupForDrawing);
 				for (auto& f : telescopeFits)
 					f.draw( setupForDrawing.ymin(), setupForDrawing.ymax() );

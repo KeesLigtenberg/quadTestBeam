@@ -3,6 +3,9 @@
 //based on single chip TrackFitter/PositionHit but changes were made!
 
 #include "../eventBuilder/Hit.h"
+
+#include <algorithm>
+
 #include "TVector3.h"
 
 TVector3& RotateAroundPoint(TVector3& v, double rotation, const TVector3& rotationPoint, const TVector3& rotationAxis) {
@@ -116,13 +119,17 @@ TVector3 getAveragePosition(Container hv, std::set<PositionHit::Flag> rejectFlag
 }
 
 
-std::vector<int> getHitsPerChip(std::vector<PositionHit> hits, bool rejectFlagged=false) {
+std::vector<int> getHitsPerChip(const std::vector<PositionHit>& hits, bool rejectFlagged=false) {
 	std::vector<int> nHits(4);
 	for(auto& h : hits) {
 		if(rejectFlagged and h.flag!=PositionHit::Flag::valid) continue;
 		nHits[h.chip]++;
 	}
 	return nHits;
+}
+
+int countTotalValidHits(const std::vector<PositionHit>& hits) { //simply use size() to get to total number of unflagged hits!
+	return std::count_if(hits.begin(), hits.end(), [](const PositionHit& h){return h.flag==PositionHit::Flag::valid; });
 }
 
 #pragma link C++ class PositionHit+;

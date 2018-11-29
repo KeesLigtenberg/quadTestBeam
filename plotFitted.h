@@ -39,10 +39,10 @@ void drawChipEdges(std::string alignFile="../align.dat") {
 
 void combineHistogramsForChips(std::string histName="nHits", std::string fileName="combinedFit.root") {
 	HistogramCombiner combination(histName+"combination");
-	for(auto& directory : chipDirectories) {
-		auto hist=getObjectFromFile<TH1>(directory+"/"+histName, fileName);
+	for(int i=0; i<4; i++) {
+		auto hist=getObjectFromFile<TH1>(chipDirectories[i]+"/"+histName, fileName);
 //		hist->Draw(); gPad->Update(); cin.get();
-		combination.add( hist , directory );
+		combination.add( hist , "chip "+std::to_string(i+1) );
 	}
 	//combination.normalise();
 	combination.createCombined();
@@ -310,14 +310,14 @@ void combineFittedTimeWalkForChips(std::string filename="combinedFit.root", std:
 
 //fitSlicesY with specification of range
 TH1* fitDiffusionSlices(TH2* h2, std::string x="z") {
-	TF1* gaus=new TF1("gaus","gaus(0)", -2,2);
+//	TF1* gaus=new TF1("gaus","gaus(0)", -2,2);
 	TF1* gausRange=new TF1("gausRange","gaus(0)", -0.6,0.6);
 	gausRange->SetParameters(4E4,0.05,0.22);
-	TF1* exGaus=new TF1("exGaus", "[c]*[l]/2*exp([l]/2*(2*[m]+[l]*[s]*[s]-2*x))*TMath::Erfc( ([m]+[l]*[s]*[s]-x)/sqrt(2)/[s] )", -2, 2); //Exponentially modified gaussian distribution (see wiki)
-	exGaus->SetParameters(2E4,3.1,-0.25,0.2); // Constant, Lambda, Mean, Sigma
+//	TF1* exGaus=new TF1("exGaus", "[c]*[l]/2*exp([l]/2*(2*[m]+[l]*[s]*[s]-2*x))*TMath::Erfc( ([m]+[l]*[s]*[s]-x)/sqrt(2)/[s] )", -2, 2); //Exponentially modified gaussian distribution (see wiki)
+//	exGaus->SetParameters(2E4,3.1,-0.25,0.2); // Constant, Lambda, Mean, Sigma
 	//exGaus->FixParameter(1,3.1);
 
-	h2->FitSlicesY(x=="z" ? gausRange : gausRange, 0/*firstbin*/, -1/*lastbin*/, 5/*min number of entries*/, "QNR");
+	h2->FitSlicesY(x=="z" ? gausRange : gausRange, 0/*firstbin*/, -1/*lastbin*/, 30/*min number of entries*/, "QNR");
 
 	return dynamic_cast<TH1*>(gDirectory->Get( (h2->GetName()+std::string("_2")).c_str() ));
 }
@@ -348,7 +348,8 @@ TF1* fitDiffusion( TH2* h2 , std::string x="x", double z0=0, std::string canvnam
 	//guess parameters
 	drift->SetParameter(2,z0); //z0
 	drift->SetParameter(1,0.2); //D
-	drift->SetParameter(0, 0.15);//sigma0
+	if(x=="x") 	drift->FixParameter(0, 0.0158771);
+	else drift->SetParameter(0, 0.15);//sigma0
 
 	//add error to fit
 //	h2_2=addErrorToHist(h2_2, 1E-3); //set all error bins equal
@@ -366,7 +367,7 @@ TF1* fitDiffusion( TH2* h2 , std::string x="x", double z0=0, std::string canvnam
 	gStyle->SetOptFit(false);
 	auto stats=new StatsWrapper();
 	stats->add("D_{"+x+"}",  drift->GetParameter(1)*1E3, 0, "#mum/#sqrt{cm}" );
-	stats->add("#sigma_{"+x+"0}" ,  drift->GetParameter(0)*1E3, 0, "#mum" ); 
+	if(x!="x") stats->add("#sigma_{"+x+"0}" ,  drift->GetParameter(0)*1E3, 0, "#mum" );
 	stats->add("z0" ,  drift->GetParameter(2), 2, "mm" );
 	stats->addChiSquare(*drift);
 	stats->draw();
@@ -475,7 +476,7 @@ void plotSlicedDiffusionWithFit( std::string filename="combinedFit.root",  std::
 			//cin.get();
 			stats->add( "D_{L}",  driftParams->GetParameter(1)*1E3, 0, "#mum/#sqrt{cm}" );
 			stats->add( "#sigma_{z0}" ,  driftParams->GetParameter(0)*1E3, 0, "#mum" );
-			stats->add( "z0 (fixed)" ,  driftParams->GetParameter(2), 2, "mm" );
+			stats->add( "z0" ,  driftParams->GetParameter(2), 2, "mm" );
 
 			for(int j=0; j<4; j++) {
 				drift->SetParameter(j, driftParams->GetParameter(j));

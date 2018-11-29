@@ -102,7 +102,7 @@ void TimeWalkCorrector::readParameters(std::istream& input) {
 		fun->SetParameter(i, p);
 	}
 	//first parameter should be offset, so set to zero
-	fun->SetParameter(0,0);
+//	fun->SetParameter(0,0);
 }
 
 void TimeWalkCorrector::update(TH2D* th2) {
