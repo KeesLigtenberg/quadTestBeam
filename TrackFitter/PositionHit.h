@@ -23,7 +23,7 @@ struct PositionHit : Hit{
 	unsigned char chip;
 	Vec3 residual{}, error{1,1,1};
 
-	enum class Flag : int {valid=1, highResidualxy=-1, highResidualz=-3, lowToT=-2, smallz=-4, debug=-5, shiftedTrigger=-6} flag=Flag::valid;
+	enum class Flag : int {valid=1, highResidualxy=-1, highResidualz=-3, lowToT=-2, smallz=-4, debug=-5, shiftedTrigger=-6, outsideFiducial=-7} flag=Flag::valid;
 
 
 	void RotatePosition(double rotation, const TVector3& rotationPoint, const TVector3& rotationAxis) {
@@ -119,7 +119,7 @@ TVector3 getAveragePosition(Container hv, std::set<PositionHit::Flag> rejectFlag
 }
 
 
-std::vector<int> getHitsPerChip(const std::vector<PositionHit>& hits, bool rejectFlagged=false) {
+std::vector<int> countHitsPerChip(const std::vector<PositionHit>& hits, bool rejectFlagged=false) {
 	std::vector<int> nHits(4);
 	for(auto& h : hits) {
 		if(rejectFlagged and h.flag!=PositionHit::Flag::valid) continue;

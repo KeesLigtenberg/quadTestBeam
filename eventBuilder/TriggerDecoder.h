@@ -49,6 +49,7 @@ private:
 	int triggersOutOfSync=0;
 	const int maxTriggerOutOfSync=20;
 	const int nbits;
+	const double OutOfSyncIncreaseFactor=1.;
 	
 };
 
@@ -183,7 +184,7 @@ inline unsigned long long TriggerDecoder::getNextTrigger(const std::vector<int>&
 				if(!(result%32768) ) {
 					throw TriggerDecoderException("wrong zero!");
 				}
-				std::cout<<"warning: decrease in trigger number ignored: "<<result-lastTrigger<<"\n";
+				std::cout<<"\nwarning: decrease in trigger number ignored: "<<result-lastTrigger<<"\n";
 			}
 			result=(lastTrigger+1);
 		} else {
@@ -191,12 +192,12 @@ inline unsigned long long TriggerDecoder::getNextTrigger(const std::vector<int>&
 		}
 	}
 	else if( result==lastTrigger+1) triggersOutOfSync=0; //succesful!
-	else if ( result<=lastTrigger+maxTriggerIncrease and triggersOutOfSync ) { std::cout<<"warning: trigger increased by "<<result-lastTrigger<<"\n"; }
+	else if ( result<=lastTrigger+maxTriggerIncrease+OutOfSyncIncreaseFactor*triggersOutOfSync and triggersOutOfSync ) { std::cout<<"\nwarning: trigger increased by "<<result-lastTrigger<<"\n"; }
 	else {
 		if(lastTrigger==0) {//special case: this is the before the first actual trigger
 			throw TriggerDecoderException("wrong zero!");
 		} else if(++triggersOutOfSync<maxTriggerOutOfSync) {
-			std::cout<<"warning: increase in trigger number exceeded maxTriggerIncrease, ignoring increase "<<result-lastTrigger<<"\n";
+			std::cout<<"\nwarning: increase in trigger number exceeded maxTriggerIncrease, ignoring increase "<<result-lastTrigger<<"\n";
 			result=lastTrigger+1;
 		} else {
 			throw TriggerDecoderException("increase in trigger number exceeded maxTriggerIncrease and number of triggers out of sync, exceeds maxTriggerOutOfSync");

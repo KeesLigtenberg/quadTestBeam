@@ -199,7 +199,7 @@ struct BufferedTriggerReader {
 
 	bool firstTrigger=true;
 	unsigned long long triggerShift=409.6/0.025*4096;
-	int maxTimesShifted=500;
+	int maxTimesShifted=10;
 
 	unsigned& currentEntry = reader.currentEntry;
 	const unsigned& nEntries = reader.nEntries;
@@ -336,7 +336,7 @@ void convertToTree(std::string inputFileName, std::string outputFileName) {
 //			std::cout<<"chip 0 reader entry: "<<chips[0]->currentEntry<<"/"<<chips[0]->nEntries<<"\n";
 //		}
 		if(!(trigger.number%10000) && !trigger.nShifted) { std::cout<<"entry "<<trigger.number<<"\r"<<std::flush; }
-		if(trigger.number>1E5) break;
+//		if(trigger.number>1E5) break;
 
 		const unsigned triggerTimeShift=0;//409.6/0.025*4096;//409.6/0.025*4096;
 		trigger.toa+=triggerTimeShift;

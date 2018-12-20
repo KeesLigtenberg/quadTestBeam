@@ -90,9 +90,9 @@ struct Alignment {
 		}
 		return all;
 	}
-	void drawChipEdges() const { //in global frame
+	void drawChipEdges(bool globalFrame=true) const { //in global frame
 		for(int i=0; i<4; i++) {
-			auto corners=getChipCorners(i);
+			auto corners=globalFrame ? getChipCorners(i) : chips[i].getChipCorners();
 			TPolyLine l;
 			for(auto& corner : corners) {
 				l.SetNextPoint(corner.x(), corner.y());
@@ -138,16 +138,16 @@ double getDriftSpeedFactor(TFile& file, bool draw) {
 }
 
 void Alignment::updateShifts(TFile& file) {
-	quad.updateShift(file, "quad");
-//	for (int i = 0; i < 4; i++) {
-//		chips[i].updateShift(file, "chip" + std::to_string(i + 1));
-//	}
+//	quad.updateShift(file, "quad");
+	for (int i = 0; i < 4; i++) { //skip chip0, because otherwise we would have a redundant d.o.f.
+		chips[i].updateShift(file, "chip" + std::to_string(i));
+	}
 }
 void Alignment::updateRotations(TFile& file) {
-	quad.updateRotation(file, "quad");
-//	for (int i = 0; i < 4; i++) {
-//		chips[i].updateRotation(file, "chip" + std::to_string(i + 1));
-//	}
+//	quad.updateRotation(file, "quad");
+	for (int i = 0; i < 4; i++) {
+		chips[i].updateRotation(file, "chip" + std::to_string(i));
+	}
 }
 
 void Alignment::updateDriftSpeed(TFile& file) {

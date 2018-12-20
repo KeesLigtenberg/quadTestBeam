@@ -154,8 +154,8 @@ struct ShiftAndRotateAlignment : AlignmentHolder {
 		return hpos;
 	}
 
-	void updateShift(TFile&, std::string dirName);
-	void updateShift(TFile& file, const std::string& dirName, int axis);
+	virtual void updateShift(TFile&, const std::string& dirName);
+	void updateShift(TFile& file, const std::string& histName, int i);
 	void updateCOM(TFile& file, std::string dirName);
 	void updateRotation(TFile&, std::string dirName);
 
@@ -178,22 +178,24 @@ struct ChipAlignment : ShiftAndRotateAlignment {
 			const std::array<TVector3, 3> unitVectors={ TVector3{1,0,0}, TVector3{0,1,0}, TVector3{0,0,1} };
 			hpos=RotateAroundPoint(hpos, rotation[i],COM, unitVectors[i]);
 		}
-		auto dir=(chipNumber==0 || chipNumber==3) ? -1 : 1 ; //because of chip orientation
-		hpos[0]*=dir; hpos[1]*=dir;
+//		auto dir=(chipNumber==0 || chipNumber==3) ? -1 : 1 ; //because of chip orientation
+//		hpos[0]*=dir; hpos[1]*=dir;
 		hpos+=shift;
 		return hpos;
 	}
 	using ShiftAndRotateAlignment::rotateAndShiftBack;
 	TVector3& rotateAndShiftBack(TVector3& hpos) const {
 		hpos-=shift;
-		auto dir=(chipNumber==0 || chipNumber==3) ? -1 : 1 ;//because of chip orientation
-		hpos[0]*=-dir; hpos[1]*=dir;
+//		auto dir=(chipNumber==0 || chipNumber==3) ? -1 : 1 ;//because of chip orientation
+//		hpos[0]*=-dir; hpos[1]*=dir;
 		for(int i=2; i>=0; i--) {
 			const std::array<TVector3, 3> unitVectors={ TVector3{1,0,0}, TVector3{0,1,0}, TVector3{0,0,1} };
 			hpos=RotateAroundPoint(hpos, -rotation[i],COM, unitVectors[i]);
 		}
 		return hpos;
 	}
+
+	virtual void updateShift(TFile&, const std::string& dirName);
 
 	std::array<TVector3,4> getChipCorners() const { //fixme
 		std::array<TVector3,4> corners={//upper-left, upper-right, bottom-left, bottom-right
@@ -232,26 +234,34 @@ struct ChipAlignment : ShiftAndRotateAlignment {
 
 };
 
-void ShiftAndRotateAlignment::updateShift(TFile& file,const std::string& dirName, int i) {
-		const std::string histNames[] = { "xResidual", "yResidual", "zResidual" };
-		auto hist = getObjectFromFile<TH1>(dirName + "/" + histNames[i], &file);
+void ShiftAndRotateAlignment::updateShift(TFile& file,const std::string& histName, int i) {
+		auto hist = getObjectFromFile<TH1>(histName, &file);
 		const int minEntries = 100;
 		if (hist->GetEntries() < minEntries) {
-			std::cout << "skipped " << dirName << " because less than " << minEntries
+			std::cout << "skipped " << histName << " because less than " << minEntries
 					<< " in histogram\n";
 		} else {
 			double mean = hist->GetMean(); //getMeanFromGausCoreFit(*hist);
 			shift[i] -= mean;
-			std::cout << "update " << histNames[i] << " by " << mean << "\n";
+			std::cout << "update " << histName << " by " << mean << "\n";
 		}
 }
 
-void ShiftAndRotateAlignment::updateShift(TFile& file, std::string dirName) {
+void ShiftAndRotateAlignment::updateShift(TFile& file, const std::string& dirName) {
 	std::cout<<dirName<<"\n";
 	for (int i = 0; i < 3; i++) {
-		updateShift(file, dirName, i);
+		const std::string histNames[] = { "xResidual", "yResidual", "zResidual" };
+		updateShift(file, dirName+"/"+histNames[i], i);
 	}
 }
+void ChipAlignment::updateShift(TFile& file, const std::string& dirName) {
+	std::cout<<dirName<<"\n";
+	for (int i = 0; i < 3; i++) {
+		const std::string histNames[] = { "xResidual_local", "yResidual_local", "zResidual_local" };
+		ShiftAndRotateAlignment::updateShift(file, dirName+"/"+histNames[i], i);
+	}
+}
+
 
 void ShiftAndRotateAlignment::updateCOM(TFile& file, std::string dirName) {
 	//Find Center of Mass (point of rotation)

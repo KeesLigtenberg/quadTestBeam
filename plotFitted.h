@@ -31,9 +31,15 @@ std::vector<std::string> chipDirectories={"chip0", "chip1","chip2","chip3"};
 std::vector<int> chipMapping={2,1,3,0};
 std::vector<int> chipReverseMapping={4,2,1,3};//for canv->cd
 
-void drawChipEdges(std::string alignFile="../align.dat") {
+void drawChipEdges(std::string alignFile="align.dat") {
 	Alignment	alignment(alignFile);
 	alignment.drawChipEdges();
+	gStyle->SetOptStat(0);
+}
+
+void drawChipEdgesLocal(std::string alignFile="align.dat") {
+	Alignment	alignment(alignFile);
+	alignment.drawChipEdges(false);
 	gStyle->SetOptStat(0);
 }
 
@@ -47,11 +53,11 @@ void combineHistogramsForChips(std::string histName="nHits", std::string fileNam
 	//combination.normalise();
 	combination.createCombined();
 }
-void combineDrawHistogramsForChips(std::string expression, std::string cut, std::string drawOption, std::string histName="Hist", std::string fileName="fitted.root", std::string treeName="fitResults") {
+void combineDrawHistogramsForChips(std::string expression, std::string cut="1", std::string drawOption="", std::string histName="Hist", std::string fileName="combinedFit.root", std::string treeName="fitResults") {
 	auto tree = getObjectFromFile<TTree>(treeName, fileName);
 	HistogramCombiner combination(histName+"Combination");
 	for(int i=0;i<4;i++) {
-		auto hist=getHistFromTree(tree, expression, cut+" && chip=="+to_string(i), "chip"+to_string(i)+histName, drawOption.c_str());
+		auto hist=getHistFromTree(tree, expression, cut+" && chip=="+to_string(i), "chip"+to_string(i)+histName, drawOption.c_str(),1E6);
 		hist->SetTitle(("Chip "+to_string(i+1)).c_str());
 		combination.add(hist);
 	}
@@ -81,14 +87,17 @@ void combineDrawPadsForChips(std::string expression, std::string cut, std::strin
 	}
 }
 
-
-void plotHitMap(std::string file="fitted.root", std::string alignFile="align.dat") {
+//only accapted hits
+void plotHitMap(std::string file="combinedFit.root", std::string alignFile="align.dat", std::string hitMapName="positionHitMap") {
 	new TCanvas("hitmap", "hitmap", 850,1000)	;
 
 	//hits
 	auto first=true;
-	for(const auto& dir:chipDirectories) {
-		auto hist=getObjectFromFile<TH2>(dir+"/positionHitMap", file);
+
+//	for(const auto& dir:chipDirectories)
+	std::string dir="quad";
+	{
+		auto hist=getObjectFromFile<TH2>(dir+"/"+hitMapName, file);
 		if(first) {
 			hist->SetTitle(";x-position [mm];y-position [mm]; Hits");
 			hist->Draw("colz");
@@ -107,6 +116,41 @@ void plotHitMap(std::string file="fitted.root", std::string alignFile="align.dat
 
 	//chip edges
 	drawChipEdges(alignFile);
+}
+
+//this is all hits
+void plotHitMapFromDraw(std::string file="fitted.root", std::string alignFile="align.dat") {
+
+	new TCanvas("hitmap", "hitmap", 850,1000)	;
+	auto tree=getObjectFromFile<TTree>("fitResults",file);
+	auto hist=getHistFromTree(*tree, "position.y:position.x", "", "h(564,-5,27,745,173,214)", "colz",1E6);
+
+	hist->SetTitle(";x-position [mm];y-position [mm]; Hits");
+	gPad->SetMargin(0.1,0.15,0.1,0.05);
+	gPad->SetTicks(1,1);
+
+	hist->GetYaxis()->SetTitleOffset(1.3);
+	hist->GetXaxis()->SetTitleOffset(1.1);
+	hist->GetZaxis()->SetTitleOffset(1.3);
+
+	drawChipEdges(alignFile);
+
+}
+
+void combineHistogramsWithMean(std::string histName="xResidual", std::string fileName="combinedFit.root") {
+	HistogramCombiner combination(histName+"combination");
+	for(int i=0; i<4; i++) {
+		auto hist=getObjectFromFile<TH1>(chipDirectories[i]+"/"+histName, fileName);
+//		hist->Draw(); gPad->Update(); cin.get();
+		auto meanstr=std::to_string(int(1000*hist->GetMean()));
+		combination.add( hist , "chip "+std::to_string(i+1)+" (mean "+meanstr+" #mum)" );
+	}
+	//combination.normalise();
+	combination.createCombined();
+}
+
+void drawToT(std::string fileName="combinedFit.root") {
+	combineDrawHistogramsForChips("ToT*25E-3", "fabs(ToT*25E-3)<2.5", "", "hist(100,0,2.5)", fileName);
 }
 
 void plotDeformations(std::string x="x", std::string file="fitted.root", std::string alignFile="../align.dat") {
@@ -204,9 +248,9 @@ void plotHitAverage(std::string file="fitted.root") {
 
 void plotTimeWalkResiduals( std::string filename="fitted.root" ) {
 
-	auto uncorrected=getObjectFromFile<TH2>("zResidualByToT", filename);
+	auto uncorrected=getObjectFromFile<TH2>("quad/zResidualByToT", filename);
 	TH1* uncorredtedHist=uncorrected->ProjectionY();
-	auto corrected=getObjectFromFile<TH2>("zResidualByToTCorrected", filename);
+	auto corrected=getObjectFromFile<TH2>("quad/zResidualByToTCorrected", filename);
 	TH1* correctedHist=corrected->ProjectionY();
 	uncorredtedHist=makeXShifted(uncorredtedHist, -uncorredtedHist->GetMean() );
 
@@ -342,11 +386,12 @@ TF1* fitDiffusion( TH2* h2 , std::string x="x", double z0=0, std::string canvnam
 	h2_2->GetXaxis()->SetTitle("z-position [mm]");
 	h2_2->GetYaxis()->SetTitle( ("#sigma_{"+x+"} from fit to track-residual [mm]").c_str() );				
 	increaseAxisSize(h2_2, 0.05);	
-	h2_2->GetYaxis()->SetRangeUser(0,1);
+	h2_2->GetYaxis()->SetRangeUser(0, x=="x"?0.5:0.7 );
 	h2_2->GetXaxis()->SetRangeUser(z0,25);
 	
 	//guess parameters
-	drift->SetParameter(2,z0); //z0
+	if(x=="z") drift->FixParameter(2,z0);
+	else drift->SetParameter(2,z0); //z0
 	drift->SetParameter(1,0.2); //D
 	if(x=="x") 	drift->FixParameter(0, 0.0158771);
 	else drift->SetParameter(0, 0.15);//sigma0
@@ -441,7 +486,7 @@ void plotSlicedDiffusionWithFit( std::string filename="combinedFit.root",  std::
 	auto hist3=getObjectFromFile<TH3D>(object, filename);
 	auto zaxis=hist3->GetZaxis();
 
-	double z0=0;
+	double z0=1;
 
 	//HistogramCombiner slices("slices");
 	std::vector<std::string> slicename = {"0.10 #mus < ToT < 0.30 #mus", "ToT > 0.30 #mus"};
@@ -472,7 +517,7 @@ void plotSlicedDiffusionWithFit( std::string filename="combinedFit.root",  std::
 		//slices.add(clone,slicename.at(i)+";z-position [mm];#sigma_{z} from fit to track-residual [mm]");//+" ("+std::to_string(int(proj->GetEntries()/1000000+0.49))+"M hits)");
 
 		if(i==1) {
-			auto driftParams=fitDiffusion(proj, "rx", z0);
+			auto driftParams=fitDiffusion(proj, "z", z0);
 			//cin.get();
 			stats->add( "D_{L}",  driftParams->GetParameter(1)*1E3, 0, "#mum/#sqrt{cm}" );
 			stats->add( "#sigma_{z0}" ,  driftParams->GetParameter(0)*1E3, 0, "#mum" );
@@ -503,6 +548,11 @@ void plotSlicedDiffusionWithFit( std::string filename="combinedFit.root",  std::
 }
 
 
+void plotDriftVelocity( std::string filename="fitted.root", std::string alignFile="align.dat") {
+	Alignment align(alignFile);
+	auto file=openFile(filename);
+	align.updateDriftSpeed(*file);
+}
 
 /*
 void plotDriftVelocity( std::string filename="fitted.root", std::string alignFile="../align.dat") {
@@ -558,4 +608,36 @@ void plotCorrelations( std::string combinedFileName="combinedFit.root") {
 
 }
 
+
+
+void fitDeformationCorrections(std::string fileName="combinedFit.root") {
+	auto correction=new TF1("correction", "-[p1]/(1+pow((x-[p0])/[p2], 2)) + [p4]/(1+pow((x-[p3])/[p5],2))+[p6]");
+//	std::string dir="chip0";
+	std::vector<std::vector<double> > estimatedValues={ {13.3,-2.05,1.067,13.48,-2.351,0.9421,-0.0166} };
+	for(int i=0; i<4; i++) {
+		new TCanvas();
+		auto xResidualByPosition=getObjectFromFile<TProfile2D>(chipDirectories[i]+"/xResidualByPosition_locExp", fileName );
+		auto xResidualByx=xResidualByPosition->ProfileX();
+
+		for(int j=0; j<7; j++) correction->SetParameter( j, estimatedValues[0][j] );
+		xResidualByx->Fit(correction, "QS");
+		std::cout<<"{";
+		for(int j=0; j<6; j++) std::cout<<correction->GetParameter(j)<<", ";
+		std::cout<<correction->GetParameter(6)<<"}\n";
+	}
+}
+
+void compareDeformations(std::string fileName="combinedFit.root") {
+
+	auto xResidualByPosition=getObjectFromFile<TProfile2D>("quad/xResidualByPosition_locExp", fileName );
+	auto xResidualByx=xResidualByPosition->ProfileX();
+
+	auto xResidualByPosition_cor=getObjectFromFile<TProfile2D>("quad/xResidualByPosition_corrected", fileName );
+	auto xResidualByx_cor=xResidualByPosition_cor->ProfileX();
+
+	HistogramCombiner deform("deform");
+	deform.add(xResidualByx, "Before correction;x-position [mm]; x-residual [mm]");
+	deform.add(xResidualByx_cor, "After correction");
+	deform.createCombined();
+}
 

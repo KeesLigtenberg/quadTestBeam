@@ -50,7 +50,7 @@ TelescopeTrackFitter::TelescopeTrackFitter(std::string inputfile, const Telescop
 
 	//setup tree for reading
 	hitTable->SetBranchAddress("mimosa", &mimosaHit);
-	nEvents=hitTable->GetEntriesFast();
+	nEvents=hitTable->GetEntries();
 	//    unsigned short triggerNumberBegin, triggerNumberEnd;
 	hitTable->SetBranchAddress("triggerNumberBegin", &triggerNumberBegin);
 	hitTable->SetBranchAddress("triggerNumberEnd", &triggerNumberEnd);
@@ -136,9 +136,12 @@ std::vector<std::vector<PositionHit> >&  TelescopeTrackFitter::rotateAndShift(
 }
 
 int TelescopeTrackFitter::getEntry(int iEvent) {
-	if(iEvent>=nEvents) return false;
+	if(iEvent>=nEvents) { std::cout<<"\nreached maximum number of events in telescope track fitter at event "<<iEvent<<"\n"; return false;}
 	//get entry
 	int nb=hitTable->GetEntry(iEvent);
+	if(!nb) {
+		std::cout<<"\nget entry returned 0 from telescope at event "<<iEvent<<"\n";
+	}
 	if (!mimosaHit) {
 		cout << "Did not find mimosaHit!" << endl;
 		throw 1;

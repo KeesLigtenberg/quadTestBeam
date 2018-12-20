@@ -107,7 +107,7 @@ struct ChipHistogrammer {
 	ChipHistogrammer(std::string name, const Alignment& align) ;
 
 	std::unique_ptr<TH1I> nHits;
-	std::unique_ptr<TH1D> driftTime, ToT;
+	std::unique_ptr<TH1D> driftTime, ToT, nShiftedTrigger;
 	std::unique_ptr<TH2D> pixelHitMap;
 	std::unique_ptr<TH1D> xRotation, yRotation, zRotation;
 
@@ -136,7 +136,7 @@ struct ChipHistogrammer {
 			zResidualByPosition->Fill(position.x,position.y,residual.z);
 		}
 		void createHistograms(const PostionRange& range);
-	} global{""}, local{"_local"}, locExp{"_locExp"};
+	} global{""}, local{"_local"}, locExp{"_locExp"}, corrected{"_corrected"};
 
 	void fillHit(const PositionHit& h);
 	void fillRotation(const PositionHit& h, const TVector3& COM);
@@ -160,7 +160,7 @@ ChipHistogrammer::ChipHistogrammer(std::string name, const Alignment& align) : d
 	constexpr double ToABinWidth=1.5625E-3;
 	driftTime=unique_ptr<TH1D>(new TH1D{"driftTime","Drift time;Drift time [#mus];Hits", int(0.8/ToABinWidth),-0.39999,0.4}); //zero would be rounded up (wrong), so move bin slightly to 0.099999
 	ToT=			unique_ptr<TH1D>(new TH1D{"ToT", "Time over threshold;ToT [#mus];Hits",80,0,2});
-
+	nShiftedTrigger= unique_ptr<TH1D>(new TH1D{"nShiftedTrigger", "nShiftedTrigger;Shifted time [409.6 #mus]; Entries", 500,0,500});
 
 	pixelHitMap=unique_ptr<TH2D>(new TH2D{"pixelHitMap", "Hitmap by pixel;Columns;Rows", 256,0, 256, 256,0,256});
 
@@ -179,6 +179,7 @@ ChipHistogrammer::ChipHistogrammer(std::string name, const Alignment& align) : d
 	global.createHistograms(rangeGlobal);
 	local.createHistograms(rangeQuad);
 	locExp.createHistograms(rangeQuad);
+	corrected.createHistograms(rangeQuad);
 
 
 	startDir->cd();
@@ -215,11 +216,12 @@ void ChipHistogrammer::fillHit(const PositionHit& h) {
 	pixelHitMap->Fill(h.column, h.row);
 	zResidualByToTCorrected->Fill(h.ToT*25E-3, h.residual.z);
 	zResidualByDriftTime->Fill(h.driftTime/4096.*25E-3,h.residual.z);
+	nShiftedTrigger->Fill(h.nShiftedTrigger);
 	global.fill(h.position, h.residual, h.ToT);
 	hitsCounter++;
 }
 
-void ChipHistogrammer::fillRotation(const PositionHit& h, const TVector3& COM) {
+void ChipHistogrammer::fillRotation(const PositionHit& h, const TVector3& COM) { //h in timepix coordinates, COM
 	//todo: do proper 3d rotation alignment
 	auto d=h.position-COM;
 	//x
@@ -228,9 +230,12 @@ void ChipHistogrammer::fillRotation(const PositionHit& h, const TVector3& COM) {
 	xRotation->Fill(phix, perp2x);
 
 	//y
-	double perp2y=d.Perp2({0,1,0});
-	double phiy=(d.x()*h.residual.z-d.z()*h.residual.x)/perp2y;
-	yRotation->Fill(phiy, perp2y);
+//	double perp2y=d.Perp2({0,1,0});
+//	double phiy=(d.x()*h.residual.z-d.z()*h.residual.x)/perp2y;
+//	yRotation->Fill(phiy, perp2y);
+	//for the moment, until error are included, use only x residuals in y rotation!
+	double phiy=-h.residual.x/d.z();
+	yRotation->Fill(phiy,d.z()*d.z());
 
 	//z
 	double phi=(d.y()*h.residual.x-d.x()*h.residual.y)/d.Perp2();
@@ -306,8 +311,8 @@ void QuadTrackFitter::Loop(std::string outputFile,const Alignment& alignment) {
 
 		//retrieve hits
 		posHits=getSpaceHits(alignment);
-		nHits=getHitsPerChip(posHits,false);
-		nHitsPassed=getHitsPerChip(posHits,true);
+		nHits=countHitsPerChip(posHits,false);
+		nHitsPassed=countHitsPerChip(posHits,true);
 		nHitsPassedTotal=std::accumulate(nHitsPassed.begin(), nHitsPassed.end(),0);
 
 //		if( (nHits[0] + nHits[1]>70) ) {

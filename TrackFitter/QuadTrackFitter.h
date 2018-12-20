@@ -54,11 +54,15 @@ public:
 	virtual ~QuadTrackFitter();
 	void Loop(std::string outputFile, const Alignment& alignment);
 	int getEntry(Long64_t entryNumber) {
-		if(entryNumber>=reader.tree->GetEntries()) return false;
+		if(entryNumber>=reader.tree->GetEntries()) {
+			return false;
+			std::cout<<"\nReached end of quad tree at entry "<<entryNumber<<"\n";
+		}
 		auto retStatus= reader.tree->GetEntry(entryNumber);
+		if(!retStatus) std::cout<<"\ncould not get entry "<<entryNumber<<" from quad tree\n";
 
 		return retStatus;
-	} //returns false if valid
+	} //returns true if valid
 
 	QuadTreeReader reader;
 	std::vector<PositionHit> posHits;

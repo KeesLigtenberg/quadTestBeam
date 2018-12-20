@@ -86,7 +86,7 @@ void makeHistograms(std::string inputFileName, std::string outputFileName) {
 			std::cout<<"frame "<<frame<<" saved "<<outputTrees.triggerNumber<<"\r"<<std::flush;
 			if(!(frame%1000000)) {  std::cout<<"\nforcing autosave..\n"; outputTrees.tree.AutoSave();}
 		}
-//		if( frame > 10E6  ) break;
+		if( frame > 10E6  ) break;
 
 		//read triggers
 		while(triggers.size() and triggers.front().toa< t -triggerWindow/2) triggers.pop_front();
