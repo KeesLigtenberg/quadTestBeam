@@ -103,9 +103,8 @@ struct Alignment {
 	}
 };
 
-namespace {
 
-double getDriftSpeedFactor(TFile& file, bool draw) {
+inline double getDriftSpeedFactor(TFile& file, bool draw) {
 	//calculate driftspeed
 //	std::cout<<"get zResidualByz from quad\n";
 	std::string histogramName="zResidualByz_locExp";
@@ -135,7 +134,6 @@ double getDriftSpeedFactor(TFile& file, bool draw) {
 	return slope;
 }
 
-}
 
 void Alignment::updateShifts(TFile& file) {
 //	quad.updateShift(file, "quad");

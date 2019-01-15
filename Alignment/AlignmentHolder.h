@@ -236,7 +236,7 @@ struct ChipAlignment : ShiftAndRotateAlignment {
 
 void ShiftAndRotateAlignment::updateShift(TFile& file,const std::string& histName, int i) {
 		auto hist = getObjectFromFile<TH1>(histName, &file);
-		const int minEntries = 100;
+		const int minEntries = 1000;
 		if (hist->GetEntries() < minEntries) {
 			std::cout << "skipped " << histName << " because less than " << minEntries
 					<< " in histogram\n";
@@ -281,6 +281,8 @@ void ShiftAndRotateAlignment::updateRotation(TFile& file, std::string dirName) {
 	for(int i=0; i<3; i++) {
 		const std::array<std::string,3> x={"x", "y", "z"};
 		auto xHist=getObjectFromFile<TH1>(dirName+"/"+x[i]+"Rotation", &file);
+		const int minEntries=10000;
+		if(xHist->GetEntries()<minEntries)  {std::cout<<"skipped "<<dirName<<" "<<x[i]<<" rotation because less than "<<minEntries<<" in histogram\n"; continue;}
 		std::cout<<"update "<<x[i]<<" rotation by "<<xHist->GetMean()<<"\n";
 		rotation[i]+=xHist->GetMean();
 	}

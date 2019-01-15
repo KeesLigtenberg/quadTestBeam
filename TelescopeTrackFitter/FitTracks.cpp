@@ -69,7 +69,7 @@ void FitTracks (std::string inputfile, int nRepeatFit=6) {
 
 
 	for(int i=0; i<nRepeatFit; i++) {
-				cout<<"fitting "<<i<<endl;
+				cout<<"\n\nfitting "<<i<<endl;
 //				if(i==4) telescopeFitter.displayEvent=true;
 
 				if(i>=3) telescopeFitter.makeTrackHistograms=true;

@@ -73,4 +73,7 @@ public:
 	std::vector<PositionHit> getSpaceHits(const Alignment& alignment);
 };
 
+
+
+
 #endif /* LASERDATAFITTER_LASERDATAFITTER_H_ */

@@ -89,17 +89,18 @@ namespace {
 	}
 
 
+	struct PositionRange { double xmin, xmax, ymin, ymax; };
+	inline PositionRange rangeFromCorners(const std::vector<TVector3>& corners) {
+		auto xrange=std::minmax_element(corners.begin(), corners.end(), [](const TVector3& v, const TVector3& w){return v.x()<w.x();});
+		auto yrange=std::minmax_element(corners.begin(), corners.end(), [](const TVector3& v, const TVector3& w){return v.y()<w.y();});
+		auto xmin=xrange.first->x(),xmax=xrange.second->x(),ymin=yrange.first->y(),ymax=yrange.second->y();
+		return {xmin,xmax,ymin,ymax};
+	}
+
 
 }
 
 
-struct PostionRange { double xmin, xmax, ymin, ymax; };
-PostionRange rangeFromCorners(const std::vector<TVector3>& corners) {
-	auto xrange=std::minmax_element(corners.begin(), corners.end(), [](const TVector3& v, const TVector3& w){return v.x()<w.x();});
-	auto yrange=std::minmax_element(corners.begin(), corners.end(), [](const TVector3& v, const TVector3& w){return v.y()<w.y();});
-	auto xmin=xrange.first->x(),xmax=xrange.second->x(),ymin=yrange.first->y(),ymax=yrange.second->y();
-	return {xmin,xmax,ymin,ymax};
-}
 
 
 struct ChipHistogrammer {
@@ -135,8 +136,9 @@ struct ChipHistogrammer {
 			xResidualByPosition->Fill(position.x,position.y,residual.x);
 			zResidualByPosition->Fill(position.x,position.y,residual.z);
 		}
-		void createHistograms(const PostionRange& range);
+		void createHistograms(const PositionRange& range);
 	} global{""}, local{"_local"}, locExp{"_locExp"}, corrected{"_corrected"};
+	std::unique_ptr<TProfile2D> xResidualByPixel, zResidualByPixel;
 
 	void fillHit(const PositionHit& h);
 	void fillRotation(const PositionHit& h, const TVector3& COM);
@@ -166,7 +168,7 @@ ChipHistogrammer::ChipHistogrammer(std::string name, const Alignment& align) : d
 
 	xRotation=unique_ptr<TH1D>(new TH1D{"xRotation", "x-rotation;x-rotation [rad.]; Hits", 100,-0.5,0.5});
 	yRotation=unique_ptr<TH1D>(new TH1D{"yRotation", "y-rotation;y-rotation [rad.]; Hits", 100,-0.5,0.5});
-	zRotation=unique_ptr<TH1D>(new TH1D{"zRotation", "z-rotation;z-rotation [rad.]; Hits", 100,-1,1});
+	zRotation=unique_ptr<TH1D>(new TH1D{"zRotation", "z-rotation;z-rotation [rad.]; Hits", 100,-0.2,0.2});
 
 
 	zResidualByToT=std::unique_ptr<TH2D>(new TH2D{"zResidualByToT", "z-residual by ToT;ToT [#mus]; z-residual [mm]", 100,0,2.5, 200,-5,5});
@@ -174,18 +176,21 @@ ChipHistogrammer::ChipHistogrammer(std::string name, const Alignment& align) : d
 	zResidualByDriftTime=std::unique_ptr<TH2D>(new TH2D{"zResidualByDriftTime", "z-residuals as a function of drift time;Drift time [#mus];z-residual [mm]", int(0.8/ToABinWidth),-0.39999,0.4,50,-2,2});
 
 	auto rangeGlobal=rangeFromCorners( align.getAllChipCorners() );
-	auto rangeQuad=rangeFromCorners( align.getAllChipCornersQuad() );
+//	auto rangeQuad=rangeFromCorners( align.getAllChipCornersQuad() ); //automatic range
+	PositionRange rangeQuad{0,29.04,-14.55,25.05};
 
 	global.createHistograms(rangeGlobal);
 	local.createHistograms(rangeQuad);
 	locExp.createHistograms(rangeQuad);
 	corrected.createHistograms(rangeQuad);
 
+	xResidualByPixel=std::unique_ptr<TProfile2D>(new TProfile2D{"xResidualByPixel", "mean x-residual by pixel;Columns;Rows", 256,0,256,256,0,256});
+	zResidualByPixel=std::unique_ptr<TProfile2D>(new TProfile2D{"zResidualByPixel", "mean z-residual by pixel;Columns;Rows", 256,0,256,256,0,256});
 
 	startDir->cd();
 }
 
-void ChipHistogrammer::residualHistograms::createHistograms(const PostionRange& range) {
+void ChipHistogrammer::residualHistograms::createHistograms(const PositionRange& range) {
 	using namespace std;
 	const int nBins=160, nBinsZ=150;
 
@@ -208,6 +213,9 @@ void ChipHistogrammer::residualHistograms::createHistograms(const PostionRange& 
 		int((xmax-xmin)/.055),xmin,xmax,int((ymax-ymin)/.055),ymin, ymax});
 	zResidualByPosition=std::unique_ptr<TProfile2D>(new TProfile2D{ ("zResidualByPosition"+name).c_str(), "mean z-residual by position;x [mm]; y[mm]; mean z-residual [mm]",
 		int((xmax-xmin)/.055),xmin,xmax,int((ymax-ymin)/.055),ymin, ymax});
+	for(auto prof2d : {&xResidualByPosition, &zResidualByPosition} ) {
+		(*prof2d)->SetMinimum(-0.1), (*prof2d)->SetMaximum(0.1);
+	}
 }
 
 void ChipHistogrammer::fillHit(const PositionHit& h) {
@@ -218,6 +226,9 @@ void ChipHistogrammer::fillHit(const PositionHit& h) {
 	zResidualByDriftTime->Fill(h.driftTime/4096.*25E-3,h.residual.z);
 	nShiftedTrigger->Fill(h.nShiftedTrigger);
 	global.fill(h.position, h.residual, h.ToT);
+	xResidualByPixel->Fill(h.column,h.row, h.residual.x);
+	zResidualByPixel->Fill(h.column,h.row, h.residual.z);
+
 	hitsCounter++;
 }
 

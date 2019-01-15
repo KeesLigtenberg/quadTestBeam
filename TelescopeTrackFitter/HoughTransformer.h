@@ -323,7 +323,7 @@ inline void HoughTransformer::drawClusters(const T& clusters, const DetectorConf
 	}
 	if(not pointTree.GetEntries()) return;
 
-	gStyle->SetMarkerStyle(20);
+	pointTree.SetMarkerStyle(20);
 	pointTree.Draw("h.position.y:h.position.z:h.position.x:cluster*10", "", "*colz");
 
 
@@ -351,12 +351,13 @@ inline void HoughTransformer::drawCluster(const T& cluster, const DetectorConfig
 	for(auto& iHit : cluster ) {
 		h=iHit;
 //		std::cout<<int(h.ToT)<<"\n";
-//		if(h.flag==PositionHit::Flag::valid)
+//		if(h.flag==PositionHit::Flag::shiftedTrigger) continue;
+		if(h.flag==PositionHit::Flag::valid)
 			pointTree.Fill();
 	}
 	if(not pointTree.GetEntries()) return;
 
-	gStyle->SetMarkerStyle(20);
+	pointTree.SetMarkerStyle(20);
 	gStyle->SetOptTitle(0);
 	double totAxis=1.6;
 	static TCanvas* canv=new TCanvas("cluster_display", "Event display", 800,600);
@@ -434,15 +435,16 @@ inline void drawCluster2D(const T& cluster, const DetectorConfiguration& detecto
 	for(auto& iHit : cluster ) {
 		h=iHit;
 //		std::cout<<int(h.ToT)<<"\n";
+		if(h.flag==PositionHit::Flag::shiftedTrigger) continue;
 //		if(h.flag==PositionHit::Flag::valid)
 			pointTree.Fill();
 	}
 	if(not pointTree.GetEntries()) return;
 
-	gStyle->SetMarkerStyle(7);
+	pointTree.SetMarkerStyle(7);
 	gStyle->SetOptTitle(0);
 	double totAxis=1.6;
-	static TCanvas* canv=new TCanvas("cluster_display", "Event display", 600,800);
+	static TCanvas* canv=new TCanvas("cluster_display2D", "Event display 2D", 600,800);
 	canv->cd();
 	pointTree.Draw( "h.position.y:h.position.x" , "", ""); //ToT to microseconds
 

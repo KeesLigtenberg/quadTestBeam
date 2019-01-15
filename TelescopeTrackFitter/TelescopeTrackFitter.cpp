@@ -283,20 +283,20 @@ void TelescopeTrackFitter::fitTracks(std::string outputfilename) {
 
 	}
 
-	std::cout<<"\npassed: "<<nPassed<<"/"<<nEvents<<" with "<<nClusters<<"tracks \n";
+	std::cout<<"\npassed: "<<nPassed<<"/"<<nEvents<<" with "<<nClusters<<"tracks \n\n";
 
 	//Recalculate centre of mass of hits for each plane
 	if(recalculateCOM) {
 		cout<<"centre of chip is "<<detector.planexmax()/2<<", "<<detector.planeymax()/2<<endl;
 		for(int i=0; i<detector.nPlanes; ++i) {
 			hitsCentre[i]={ hitsXSum[i]/nHits[i], hitsYSum[i]/nHits[i] };
-			cout<<"Hits centre of mass is: ("<<hitsCentre[i].first<<", "<<hitsCentre[i].second<<")"<<endl;
+			cout<<"chip "<<i<<" hits centre of mass is: ("<<hitsCentre[i].first<<", "<<hitsCentre[i].second<<")"<<endl;
 		}
 		recalculateCOM=false;
 	}
 
 	for(int i=0; i<detector.nPlanes; i++) {
-		cout<<"average residual is "<<residualXSum[i]<<"/"<<nHits[i]<<", "<<residualYSum[i]<<"/"<<nHits[i]<<endl;
+		cout<<"chip "<<i<<" average residual is "<<residualXSum[i]<<"/"<<nHits[i]<<", "<<residualYSum[i]<<"/"<<nHits[i]<<endl;
 		averageResidualFromSum[i]= { residualXSum[i]/nHits[i], residualYSum[i]/nHits[i] };
 		rotationZFromSum[i]= rotationZSum[i]/rotationZWeightSum[i];
 	}
@@ -371,7 +371,8 @@ std::vector<std::pair<double, double> > TelescopeTrackFitter::getMeanResiduals()
 std::vector<double> TelescopeTrackFitter::getRotations() {
 //	auto rotation= residualHistograms->getRotationOfPlanes();
 	auto rotation= rotationZFromSum;
-	for(auto& r : rotation ) cout<<"rotation: "<<r<<" = "<<r/M_PI*180.<<endl;
+	int i=0;
+	for(auto& r : rotation ) cout<<"chip "<<i++<<" rotation: "<<r<<" = "<<r/M_PI*180.<<endl;
 	return rotation;
 }
 

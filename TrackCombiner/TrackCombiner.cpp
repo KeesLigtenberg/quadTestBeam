@@ -131,7 +131,9 @@ void TrackCombiner::Process() {
  		const int minHitsPerChip=10;
  		if( (nHitsPerChip[0]+nHitsPerChip[1] <2*minHitsPerChip) and (nHitsPerChip[2]+ nHitsPerChip[3]<2*minHitsPerChip ) ) continue;
 
-// 		for(auto& h : quadHits) flagShiftedTrigger(h,4); //max shifted
+// 		for(auto& h : quadHits) flagShiftedTrigger(h,50); //max shifted
+
+ 		//naive fiducial, better below |
 // 		for(auto& h : quadHits) {
 // 			if(h.row < 32 || h.row >224 || h.column<32 || h.column>224) {
 // 				h.flag=PositionHit::Flag::outsideFiducial;
@@ -148,9 +150,9 @@ void TrackCombiner::Process() {
  			//fiducial region
  			const bool useFiducialExpected=false;
  			if(useFiducialExpected) {
- 			Vec3 expectedAtQuad{ f.xAt(193), 193, f.yAt(193) };
- 			auto localExpectedAtQuad=alignment.quad.rotateAndShiftBack(expectedAtQuad);
- 			if(localExpectedAtQuad.x>9 and localExpectedAtQuad.x<16) continue;
+				Vec3 expectedAtQuad{ f.xAt(193), 193, f.yAt(193) };
+				auto localExpectedAtQuad=alignment.quad.rotateAndShiftBack(expectedAtQuad);
+				if( (localExpectedAtQuad.x>11.5 and localExpectedAtQuad.x<17.5) or localExpectedAtQuad.x<2.5 or localExpectedAtQuad.x>25.5 )continue;
  			}
 
  			//match by calculating number of hits in range
@@ -177,7 +179,8 @@ void TrackCombiner::Process() {
 					selectedHitAverageToTrackx->Fill(averageDist);
 
 					if(drawEvent) std::cout<<"dist "<<averageDist<<" frac "<<fraction<<"\n";
-					if ( std::fabs(averageDist) < 0.3 && fraction>0.8 ) {
+//					if ( std::fabs(averageDist) < 0.3 && fraction>0.8 ) {
+					if ( std::fabs(averageDist) < 1 && fraction>0.8 ) {
 						matched = true;
 						fittedTrack=&f;
 						quadHits=quadHitsWithResidual;
@@ -250,12 +253,16 @@ void TrackCombiner::Process() {
 				for (auto& f : telescopeFits)
 					f.draw( setupForDrawing.ymin(), setupForDrawing.ymax() );
 				drawQuadOutline(alignment, setupForDrawing.zmax() );
-			} else {
+				gPad->Update();
+			}
+			const bool draw2D=true;
+			if(draw2D){
 				//2D
 				drawCluster2D(quadHits,setupForDrawing);
 				alignment.drawChipEdges();
 				for (auto& f : telescopeFits)
 					f.XZ.draw( setupForDrawing.ymin(), setupForDrawing.ymax() );
+				gPad->Update();
 			}
 
 

@@ -199,7 +199,7 @@ struct BufferedTriggerReader {
 
 	bool firstTrigger=true;
 	unsigned long long triggerShift=409.6/0.025*4096;
-	int maxTimesShifted=10;
+	int maxTimesShifted=200;
 
 	unsigned& currentEntry = reader.currentEntry;
 	const unsigned& nEntries = reader.nEntries;
