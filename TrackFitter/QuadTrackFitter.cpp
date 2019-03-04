@@ -30,10 +30,10 @@ namespace {
 //	std::array<shift,nChips> chipShifts={{ {24.1,15.7}, {38.0, 26.3}, {23.7,26.3}, {9.9,15.7} }};
 
 
-	std::vector<PositionHit> convertHitsQuad( std::vector<Hit>* chips [], double driftSpeed, double t0Offset=0) {
+	std::vector<PositionHit> convertHitsQuad( std::vector<Hit>* chips [], double driftSpeed, double t0Offset=0 /*value to subtract from time*/) {
 		std::vector<PositionHit> hits;
 		for(int i=0; i<nChips; i++) {
-			auto chipHits=convertHitsTPC(*chips[i], i, driftSpeed, t0Offset);
+			auto chipHits=convertHitsTPC(*chips[i], i, driftSpeed, t0Offset); //t0 is subtracted from hit time
 			hits.insert(hits.end(), chipHits.begin(), chipHits.end() );
 		}
 		return hits;
@@ -123,6 +123,7 @@ struct ChipHistogrammer {
 		std::unique_ptr<TH3D> zResidualByzByToT{};
 		std::unique_ptr<TH2D>	positionHitMap{};
 		std::unique_ptr<TProfile2D> xResidualByPosition{}, zResidualByPosition{};
+		std::unique_ptr<TProfile2D> xResidualByXZ{}, zResidualByXZ{};
 		void fill(const Vec3& position, const Vec3& residual, double ToT) {
 			xResidual->Fill(residual.x);
 			yResidual->Fill(residual.y);
@@ -135,6 +136,8 @@ struct ChipHistogrammer {
 			zHit->Fill(position.z);
 			xResidualByPosition->Fill(position.x,position.y,residual.x);
 			zResidualByPosition->Fill(position.x,position.y,residual.z);
+			xResidualByXZ->Fill(position.x,position.z,residual.x);
+			zResidualByXZ->Fill(position.x,position.z,residual.z);
 		}
 		void createHistograms(const PositionRange& range);
 	} global{""}, local{"_local"}, locExp{"_locExp"}, corrected{"_corrected"};
@@ -216,6 +219,16 @@ void ChipHistogrammer::residualHistograms::createHistograms(const PositionRange&
 	for(auto prof2d : {&xResidualByPosition, &zResidualByPosition} ) {
 		(*prof2d)->SetMinimum(-0.1), (*prof2d)->SetMaximum(0.1);
 	}
+
+	double zmin=-10, zmax=40;
+	xResidualByXZ=std::unique_ptr<TProfile2D>(new TProfile2D{ ("xResidualByXZ"+name).c_str(), "mean x-residual by XZ;x [mm]; y[mm]; mean x-residual [mm]",
+		int((xmax-xmin)/.055),xmin,xmax,200,zmin, zmax});
+	zResidualByXZ=std::unique_ptr<TProfile2D>(new TProfile2D{ ("zResidualByXZ"+name).c_str(), "mean z-residual by XZ;x [mm]; y[mm]; mean z-residual [mm]",
+		int((xmax-xmin)/.055),xmin,xmax,200,zmin, zmax});
+	for(auto prof2d : {&xResidualByXZ, &zResidualByXZ} ) {
+		(*prof2d)->SetMinimum(-0.2), (*prof2d)->SetMaximum(0.2);
+	}
+
 }
 
 void ChipHistogrammer::fillHit(const PositionHit& h) {
@@ -276,7 +289,7 @@ std::vector<PositionHit> QuadTrackFitter::getSpaceHits(const Alignment& alignmen
 		h = alignment.timeWalk.correct(h);
 		h = alignment.transform(h);
 		//			if(h.position.z<alignment.hitErrors.z0) h.flag=PositionHit::Flag::smallz;
-		h.error = alignment.hitErrors.hitError(h.position.z);
+		h.error = alignment.hitErrors.hitError( alignment.quad.rotateAndShiftBack(h.position).z );
 		/*
 		 h.calculateResidual(laser);
 		 h=flagResidual(h, {2,2,2});

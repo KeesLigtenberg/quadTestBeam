@@ -55,7 +55,7 @@ public:
 			const std::vector<FitResult3D>& fits);
 
 	bool displayEvent=false;
-	bool makeTrackHistograms=false;
+	bool makeTrackHistograms=true;
 	bool recalculateCOM=true; //centre of mass
 	bool constructLineParallelToZ=false;
 	bool doBinnedClustering=false;
@@ -81,7 +81,7 @@ private:
 	HoughTransformer houghTransform;
 	BinnedClusterer binnedClustering;
 	std::unique_ptr<ResidualHistogrammer> residualHistograms;
-	std::unique_ptr<TrackHistogrammer> trackHistograms;
+	std::unique_ptr<TrackHistogrammer> trackHistograms, trackHistogramsFirst, trackHistogramsSecond;
 
 	bool passEvent( const std::vector<std::vector<PositionHit> >& spaceHit ) const;	//return true if the event is passed
 

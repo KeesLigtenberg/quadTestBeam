@@ -49,7 +49,7 @@ struct FitResult3D {
 	FitResult3D(FitResult2D XZ, FitResult2D YZ) : XZ(XZ), YZ(YZ) {};
 	virtual ~FitResult3D() {};
 
-	void draw(double zmin, double zmax) const;
+	void draw(double zmin, double zmax, Color_t color=kOrange+7) const;
 	bool isValid() const { return XZ.isValid() and YZ.isValid(); }
 	double xAt(double z) const { return XZ.at(z); };
 	double yAt(double z) const { return YZ.at(z); };
@@ -78,7 +78,8 @@ struct FitResult3D {
 #pragma link C++ class std::vector<FitResult3D>+;
 
 
-FitResult3D regressionFit3d(const HoughTransformer::HitCluster& cluster, double interceptz=0);
+template<class HitContainer=HoughTransformer::HitCluster>
+FitResult3D regressionFit3d(const HitContainer& cluster, double interceptz=0);
 
 FitResult3D makeLinesParallelToZ(double x, double y) {
 	return {

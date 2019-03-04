@@ -24,6 +24,7 @@ struct PositionHit : Hit{
 	Vec3 residual{}, error{1,1,1};
 
 	enum class Flag : int {valid=1, highResidualxy=-1, highResidualz=-3, lowToT=-2, smallz=-4, debug=-5, shiftedTrigger=-6, outsideFiducial=-7} flag=Flag::valid;
+	bool isValid() const { return flag==Flag::valid; }
 
 
 	void RotatePosition(double rotation, const TVector3& rotationPoint, const TVector3& rotationAxis) {
@@ -76,7 +77,7 @@ PositionHit& flagResidual(PositionHit& h, const TVector3& maxResidual) {
 }
 
 PositionHit& flagResidualPull(PositionHit& h, const TVector3& maxResidualPull) {
-	for(int i=0; i<2; i++) {
+	for(int i=0; i<3; i++) {
 		if(fabs(h.residual[i])/h.error[i]>maxResidualPull[i]) {
 			h.flag= i==2 ? PositionHit::Flag::highResidualz : PositionHit::Flag::highResidualxy;
 		}

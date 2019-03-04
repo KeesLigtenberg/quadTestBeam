@@ -198,7 +198,7 @@ struct ChipAlignment : ShiftAndRotateAlignment {
 	virtual void updateShift(TFile&, const std::string& dirName);
 
 	std::array<TVector3,4> getChipCorners() const { //fixme
-		std::array<TVector3,4> corners={//upper-left, upper-right, bottom-left, bottom-right
+		std::array<TVector3,4> corners={//chip0: upper-left, upper-right, bottom-left, bottom-right
 				TVector3{0,0,0},
 				TVector3{14.08,0,0},
 				TVector3{14.08,14.08,0},
@@ -298,7 +298,7 @@ struct HitErrorCalculator : AlignmentHolder {
 		TVector3 error{};
 		if(z<z0) z=z0;
 		for(int i=0; i<3; i++) {
-			error[i]=sqrt(sigma0[i]*sigma0[i]+diffusion[i]*(z-z0));
+			error[i]=sqrt(sigma0[i]*sigma0[i]+diffusion[i]*diffusion[i]*(z-z0));
 		}
 		return error;
 	}

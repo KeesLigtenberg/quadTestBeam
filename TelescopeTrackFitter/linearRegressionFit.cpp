@@ -12,13 +12,16 @@
 
 ClassImp(FitResult3D);
 
-void FitResult3D::draw(double zmin, double zmax) const { //in timepix frame, with telescope coordinates!
+void FitResult3D::draw(double zmin, double zmax, Color_t color) const { //in timepix frame, with telescope coordinates!
 	const int npoints=2;
 	double x[npoints] = { XZ.at(zmin), XZ.at(zmax)};
 	double y[npoints] = { YZ.at(zmin), YZ.at(zmax)};
 	double z[npoints] = { zmin, zmax};
+	std::cout<<"Line "<<color<<" :";
+	for(int i=0; i<npoints; i++) std::cout<<" ("<<x[i]<<", "<<y[i]<<", "<<z[i]<<")";
+	std::cout<<"\n";
 	TPolyLine3D l( npoints, x, z, y );
-	l.SetLineColor(kOrange+7);
+	l.SetLineColor(color);
 	l.SetLineWidth(2);
 	l.DrawClone();
 }
@@ -54,7 +57,8 @@ FitResult3D FitResult3D::makeRotated(double rotation, const TVector3& rotationPo
 	};
 }
 
-FitResult2D regressionXZ(const HoughTransformer::HitCluster& cluster, double interceptz=0) {
+template<class HitContainer=HoughTransformer::HitCluster>
+FitResult2D regressionXZ(const HitContainer& cluster, double interceptz=0) {
     double sumX = 0;
     double sumZ = 0;
     double sumXZ = 0;
@@ -76,7 +80,8 @@ FitResult2D regressionXZ(const HoughTransformer::HitCluster& cluster, double int
     if(std::fabs(denominator)<1E-20){
     	std::cerr<<"regressionXZ error: (sumZ * sumZ - ntot * sumZsquare)<1E-20"<<std::endl;
     	std::cerr<<"sumZ="<<sumZ<<" sumZsquare="<<sumZsquare<<" ntot="<<sumW<<std::endl;
-    	std::cerr<<cluster.size()<<" hits on "<<cluster.getNPlanesHit()<<" planes"<<std::endl;
+    	std::cerr<<cluster.size()<<" hits"<<std::endl;
+//    	std::cerr<<cluster.size()<<" hits on "<<cluster.getNPlanesHit()<<" planes"<<std::endl;
     	throw "(sumZ * sumZ - ntot * sumZsquare)<1E-20";
     }
 
@@ -92,7 +97,8 @@ FitResult2D regressionXZ(const HoughTransformer::HitCluster& cluster, double int
 
 }
 
-FitResult2D regressionYZ(const HoughTransformer::HitCluster& cluster, double interceptz=0) {
+template<class HitContainer=HoughTransformer::HitCluster>
+FitResult2D regressionYZ(const HitContainer& cluster, double interceptz=0) {
     double sumY = 0;
     double sumZ = 0;
     double sumYZ = 0;
@@ -114,7 +120,8 @@ FitResult2D regressionYZ(const HoughTransformer::HitCluster& cluster, double int
     if(std::fabs(denominator)<1E-20){
     	std::cerr<<"regressionYZ error: (sumZ * sumZ - ntot * sumZsquare)<1E-20"<<std::endl;
     	std::cerr<<"sumZ="<<sumZ<<" sumZsquare="<<sumZsquare<<" ntot="<<sumW<<std::endl;
-    	std::cerr<<cluster.size()<<" hits on "<<cluster.getNPlanesHit()<<" planes"<<std::endl;
+    	std::cerr<<cluster.size()<<" hits"<<std::endl;
+//    	std::cerr<<cluster.size()<<" hits on "<<cluster.getNPlanesHit()<<" planes"<<std::endl;
     	throw "(sumZ * sumZ - ntot * sumZsquare)<1E-20";
     }
 
@@ -131,7 +138,8 @@ FitResult2D regressionYZ(const HoughTransformer::HitCluster& cluster, double int
 }
 
 
-FitResult3D regressionFit3d(const HoughTransformer::HitCluster& cluster, double interceptz) {
+template<class HitContainer>
+FitResult3D regressionFit3d(const HitContainer& cluster, double interceptz) {
 	return FitResult3D {
 		regressionXZ(cluster, interceptz),
 		regressionYZ(cluster, interceptz)

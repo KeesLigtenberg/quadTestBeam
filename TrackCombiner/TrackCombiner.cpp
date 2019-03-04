@@ -87,6 +87,8 @@ void TrackCombiner::openFile(std::string outputFileName) {
 	top->mkdir("eventCuts")->cd();
 	selectedHitAverageToTrackx=std::unique_ptr<TH1D>( new TH1D("selectedHitAverageToTrackx", "distance from average of selected hits to track;Distance [mm];Entries", 100,-1,1) );
 	fractionInTrack=std::unique_ptr<TH1D>( new TH1D("fractionInTrack", "fraction of hits in track divided by hits in larger window;Fraction;Entries", 100,0,1) );
+	smallestShift=std::unique_ptr<TH1D>( new TH1D("smallestShift", "Smallest shift of all hits in track;Shift [409.6 #mus];",100,0,100) );
+	averageShift=std::unique_ptr<TH1D>( new TH1D("averageShift", "Average shift of all hits in track; Shift [409.6 #mus];", 100,0,100 ) );
 	top->cd();
 
 }
@@ -101,7 +103,7 @@ void TrackCombiner::Process() {
 
 
 	for(int telescopeEntryNumber=0,tpcEntryNumber=0; //5000000, 2308829
-			telescopeEntryNumber<1E5 //telescopeFitter.nEvents//1000000
+			telescopeEntryNumber<2E6 //telescopeFitter.nEvents//1000000
 			;) {
 //		triggerStatusHistogram.reset();
 
@@ -131,7 +133,7 @@ void TrackCombiner::Process() {
  		const int minHitsPerChip=10;
  		if( (nHitsPerChip[0]+nHitsPerChip[1] <2*minHitsPerChip) and (nHitsPerChip[2]+ nHitsPerChip[3]<2*minHitsPerChip ) ) continue;
 
-// 		for(auto& h : quadHits) flagShiftedTrigger(h,50); //max shifted
+// 		for(auto& h : quadHits) flagShiftedTrigger(h,5); //max shifted
 
  		//naive fiducial, better below |
 // 		for(auto& h : quadHits) {
@@ -141,7 +143,7 @@ void TrackCombiner::Process() {
 // 		}
 
  		std::vector<FitResult3D> telescopeFits=telescopeFitter.getFits(telescopeHits);
-
+ 		std::vector<FitResult3D> timepixFits;
 
  		bool matched=false;
  		FitResult3D* fittedTrack=nullptr; //todo: save element of array, because if reallocation happens, this pointer is invalidated!
@@ -158,35 +160,91 @@ void TrackCombiner::Process() {
  			//match by calculating number of hits in range
  			const bool matchByResidual=true;
  			if(matchByResidual) {
+
+
  	 			auto quadHitsWithResidual=quadHits; //copy hits!
+ 	 			//cut with fixed window
 				for(auto& h : quadHitsWithResidual) {
 					h=calculateResidualTimepix(h,f);
 					h=flagResidual(h,{1.5,1.5,2});
 				}
-				int nTotalHits=countTotalValidHits(quadHitsWithResidual);
-				if(nTotalHits>20) {
 
-					//fraction
-					int nSideBandHits=std::count_if(quadHitsWithResidual.begin(), quadHitsWithResidual.end(), [](const PositionHit& h) {
-						return h.flag==PositionHit::Flag::valid or ( (h.flag==PositionHit::Flag::highResidualxy or h.flag==PositionHit::Flag::highResidualz) and fabs(h.residual.x)<3 and fabs(h.residual.z)<4);
-					});
-					double fraction=double(nTotalHits)/nSideBandHits;
-					fractionInTrack->Fill(fraction);
+				int nHitsAfterSimpleCut=countTotalValidHits(quadHitsWithResidual);
+				if(nHitsAfterSimpleCut<20) {
+					if(nHitsAfterSimpleCut && drawEvent) std::cout<<nHitsAfterSimpleCut<<" is less than 20 hits along track!\n";
+					continue;
+				}
 
-					//average pos
-					auto avPosition = getAveragePosition(quadHitsWithResidual,true);
-					double averageDist=avPosition.x() - f.xAt(avPosition.y()) ;
-					selectedHitAverageToTrackx->Fill(averageDist);
+				//convert hits to telescope coordinates x,y,z -> x,z,y
+				std::vector<PositionHit> quadHitsInTelescopeCoords;
+				for(const auto& h : quadHitsWithResidual) {
+					PositionHit th{h};
+					std::swap(th.position.y, th.position.z);
+					std::swap(th.error.y, th.error.z);
+					quadHitsInTelescopeCoords.push_back(th);
+				}
+				//fit hits
+ 	 			FitResult3D timepixFit=regressionFit3d(quadHitsInTelescopeCoords,0);
+ 	 			timepixFits.push_back(timepixFit);
+ 	 			for(auto& h : quadHitsWithResidual) {
+ 	 				Vec3 timepixExpectedPos{h.position.x, h.position.y, timepixFit.yAt(h.position.z)};
+ 	 				h.error=alignment.hitErrors.hitError( alignment.quad.rotateAndShiftBack(timepixExpectedPos).z );
+					h=flagResidualPull(h, {2,5,3} );
+ 	 			}
 
-					if(drawEvent) std::cout<<"dist "<<averageDist<<" frac "<<fraction<<"\n";
-//					if ( std::fabs(averageDist) < 0.3 && fraction>0.8 ) {
-					if ( std::fabs(averageDist) < 1 && fraction>0.8 ) {
-						matched = true;
-						fittedTrack=&f;
-						quadHits=quadHitsWithResidual;
-						break;
-					} else if(drawEvent) std::cout<<"More than 20 chips along track, but average position did not match or fraction to low!\n";
-				} else if(drawEvent and nTotalHits) std::cout<<nTotalHits<<" is less than 20 hits along track!\n";
+
+				int nTotalValidHits=countTotalValidHits(quadHitsWithResidual);
+				if(nTotalValidHits<20) {
+					if(nTotalValidHits && drawEvent) std::cout<<nTotalValidHits<<" is less than 20 hits along track!\n";
+					continue;
+				}
+
+				//fraction
+				int nSideBandHits=std::count_if(quadHitsWithResidual.begin(), quadHitsWithResidual.end(), [](const PositionHit& h) {
+					return h.flag==PositionHit::Flag::valid
+							or ( (h.flag==PositionHit::Flag::highResidualxy or h.flag==PositionHit::Flag::highResidualz)
+//									and fabs(h.residual.x/h.error.x)<4 and fabs(h.residual.z/h.error.z)<4);
+									and fabs(h.residual.x)<5 and fabs(h.residual.z)<2);
+				});
+				double fraction=double(nHitsAfterSimpleCut)/nSideBandHits;
+				fractionInTrack->Fill(fraction);
+
+				//average pos
+				auto avPosition = getAveragePosition(quadHitsWithResidual,true);
+				double averageDist=avPosition.x() - f.xAt(avPosition.y()) ;
+				selectedHitAverageToTrackx->Fill(averageDist);
+
+				//first occurence (shift) and average shift
+				if(drawEvent) std::cout<<"dist "<<averageDist<<" frac "<<fraction<<"\n";
+				if ( std::fabs(averageDist) > 1 || fraction<0.8 ) {
+					if(drawEvent) std::cout<<"More than 20 hits along track, but average position did not match or fraction to low!\n";
+					continue;
+				}
+
+
+				int sumShift=0, nValid=0;
+				short minShift=quadHitsWithResidual.front().nShiftedTrigger;
+				{	for(const auto& h : quadHitsWithResidual) {
+						if(!h.isValid()) continue;
+						sumShift+=h.nShiftedTrigger;
+						minShift=std::min(minShift, h.nShiftedTrigger);
+						nValid++;
+					}
+					smallestShift->Fill(minShift);
+					averageShift->Fill(sumShift/nValid);
+				}
+
+				if ( minShift>5 || sumShift/nValid >150 ) {
+					if(drawEvent) std::cout<<"More than 20 hits along track, but first hit shifted by too much or average shift is too high!\n";
+					continue;
+				}
+
+
+				matched = true;
+				fittedTrack=&f;
+				quadHits=quadHitsWithResidual;
+				break;
+
  			} else {
  			//matchin by simple average
 				if( matchByAverage(quadHits, f) ) {
@@ -252,6 +310,8 @@ void TrackCombiner::Process() {
 				HoughTransformer::drawCluster(quadHits,setupForDrawing);
 				for (auto& f : telescopeFits)
 					f.draw( setupForDrawing.ymin(), setupForDrawing.ymax() );
+				for (auto& f : timepixFits)
+					f.draw( setupForDrawing.ymin(), setupForDrawing.ymax(), kTeal );
 				drawQuadOutline(alignment, setupForDrawing.zmax() );
 				gPad->Update();
 			}

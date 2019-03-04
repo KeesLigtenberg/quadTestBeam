@@ -69,12 +69,11 @@ public:
 
 class TrackHistogrammer {
 public:
-	TrackHistogrammer(const DetectorConfiguration& detector);
+	TrackHistogrammer(std::string name="");
 	void fill(const FitResult3D& entry);
 private:
 	//	TH1D phi, d0, tanLambda, z0;
 	TH1D slope1, slope2, intercept1, intercept2;
-	const DetectorConfiguration& detector;
 };
 
 

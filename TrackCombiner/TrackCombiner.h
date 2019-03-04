@@ -34,7 +34,7 @@ private:
 	std::unique_ptr<TTree> outputTree{nullptr};
 	std::array< std::unique_ptr<ChipHistogrammer>, nChips> hists{{}};
 	std::unique_ptr<ChipHistogrammer> quadHist{nullptr};
-	std::unique_ptr<TH1D> selectedHitAverageToTrackx, fractionInTrack;
+	std::unique_ptr<TH1D> selectedHitAverageToTrackx, fractionInTrack, smallestShift, averageShift;
 
 
 	struct TreeEntry {

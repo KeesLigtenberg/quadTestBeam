@@ -163,7 +163,19 @@ void TelescopeTrackFitter::drawEvent(
 
 void TelescopeTrackFitter::fitTracks(std::string outputfilename) {
 	residualHistograms=unique_ptr<ResidualHistogrammer>(new ResidualHistogrammer(outputfilename, detector));
-	if(makeTrackHistograms) trackHistograms=unique_ptr<TrackHistogrammer>(new TrackHistogrammer(detector) );
+	if(makeTrackHistograms) {
+		trackHistograms=unique_ptr<TrackHistogrammer>(new TrackHistogrammer("") );
+		trackHistogramsFirst=unique_ptr<TrackHistogrammer>(new TrackHistogrammer("First") );
+		trackHistogramsSecond=unique_ptr<TrackHistogrammer>(new TrackHistogrammer("Second") );
+	}
+
+	//make fit three
+	FitResult3D fit, fitFirstThree, fitSecondThree;
+	TTree fitTree("fitTree", "fitTree");
+	fitTree.Branch("fit", &fit);
+	fitTree.Branch("fitFirstThree", &fitFirstThree);
+	fitTree.Branch("fitSecondThree", &fitSecondThree);
+
 
 	//for calculation of com, means and rotation
 	std::vector<double> hitsXSum(detector.nPlanes), hitsYSum(detector.nPlanes);
@@ -201,10 +213,11 @@ void TelescopeTrackFitter::fitTracks(std::string outputfilename) {
 		//sum x and y here to sum all hits including noise
 
 		//hough transform
+		houghTransform.minClusterSize=5;
 		auto houghClusters = doBinnedClustering ? binnedClustering(spaceHit) : houghTransform(spaceHit);
 
 		//require at least nmin planes to be hit
-		const int nMinPlanesHit=4;
+		const int nMinPlanesHit=5;
 		houghClusters.remove_if([](const HoughTransformer::HitCluster& hc){return hc.getNPlanesHit()<nMinPlanesHit; });
 		if(!houghClusters.size()) {
 			continue;
@@ -214,11 +227,9 @@ void TelescopeTrackFitter::fitTracks(std::string outputfilename) {
 		for(auto& hitCluster : houghClusters) {
 
 			//fit track
-			if(hitCluster.size()<2 || hitCluster.getNPlanesHit()<=1) continue;
-//			if(hitCluster.isPlaneHit(0)+hitCluster.isPlaneHit(1)+hitCluster.isPlaneHit(2) < 2) continue;
-//			if(hitCluster.isPlaneHit(3)+hitCluster.isPlaneHit(4)+hitCluster.isPlaneHit(5) < 2) continue;
+			if(hitCluster.size()<2 || hitCluster.recalculateNPlanesHit()<=1) continue;
 
-			auto fit=regressionFit3d(hitCluster);
+			fit=regressionFit3d(hitCluster);
 			if(!fit.isValid()) {cerr<<"fit not valid!"<<endl;  continue;	}
 
 			//remove outliers
@@ -228,11 +239,19 @@ void TelescopeTrackFitter::fitTracks(std::string outputfilename) {
 			//refit on planes with selection
 			HoughTransformer::HitCluster selectedHits;
 			std::copy_if(hitCluster.begin(), hitCluster.end(), std::back_inserter(selectedHits), selectHitForRefit );
-			if(selectedHits.size()<2 || selectedHits.recalculateNPlanesHit()<=1) continue;
-//			if(selectedHits.isPlaneHit(0)+selectedHits.isPlaneHit(1)+selectedHits.isPlaneHit(2) < 2) continue;
-//			if(selectedHits.isPlaneHit(3)+selectedHits.isPlaneHit(4)+selectedHits.isPlaneHit(5) < 2) continue;
+			if(selectedHits.size()<5 || selectedHits.recalculateNPlanesHit()<5) continue;
 			if(constructLineParallelToZ) fit = makeLinesParallelToZ( selectedHits.front().position.x, selectedHits.front().position.y );
 			else fit=regressionFit3d(selectedHits);
+
+
+			HoughTransformer::HitCluster hitsFirstThree;
+			std::copy_if(selectedHits.begin(), selectedHits.end(), std::back_inserter(hitsFirstThree), [](const PositionHit& h){ return h.chip<=2;} );
+			fitFirstThree=regressionFit3d(hitsFirstThree);
+
+			HoughTransformer::HitCluster hitsSecondThree;
+			std::copy_if(selectedHits.begin(), selectedHits.end(), std::back_inserter(hitsSecondThree), [](const PositionHit& h){ return h.chip>=3 and h.chip<=5;} );
+			fitSecondThree=regressionFit3d(hitsSecondThree);
+
 
 			if(!fit.isValid()) {cerr<<"fit not valid!"<<endl; continue;	}
 
@@ -265,7 +284,13 @@ void TelescopeTrackFitter::fitTracks(std::string outputfilename) {
 			slope1Sum+=fit.XZ.slope; slope2Sum+=fit.YZ.slope;
 
 			fits.push_back(fit);
-			if(makeTrackHistograms) { trackHistograms->fill(fit); }
+			if(makeTrackHistograms) {
+				trackHistograms->fill(fit);
+				trackHistogramsFirst->fill(fitFirstThree);
+				trackHistogramsSecond->fill(fitSecondThree);
+
+				fitTree.Fill();
+			}
 
 			//give fit errors
 //			int i=0;
@@ -304,6 +329,8 @@ void TelescopeTrackFitter::fitTracks(std::string outputfilename) {
 	slope1FromSum=slope1Sum/nClusters;
 	slope2FromSum=slope2Sum/nClusters;
 	cout<<"slopes are "<<slope1FromSum<<" "<<slope2FromSum<<endl;
+
+	fitTree.Write();
 
 //	cin.get();
 
@@ -352,6 +379,16 @@ std::vector<FitResult3D> TelescopeTrackFitter::getFits(std::vector<std::vector<P
 		else fit=regressionFit3d(selectedHits);
 
 		if(!fit.isValid()) {cerr<<"fit not valid!"<<endl; continue;	}
+
+		{ //extra cut on scatter difference between first and last plane
+			HoughTransformer::HitCluster hitsFirstThree, hitsSecondThree;
+			std::copy_if(selectedHits.begin(), selectedHits.end(), std::back_inserter(hitsFirstThree), [](const PositionHit& h){ return h.chip<=2;} );
+			std::copy_if(selectedHits.begin(), selectedHits.end(), std::back_inserter(hitsSecondThree), [](const PositionHit& h){ return h.chip>=3; } );
+			if(hitsFirstThree.recalculateNPlanesHit()<=1 or hitsSecondThree.recalculateNPlanesHit()<=1) continue;
+			auto fitFirst=regressionFit3d(hitsFirstThree);
+			auto fitSecond=regressionFit3d(hitsSecondThree);
+			if( fabs(fitFirst.XZ.slope-fitSecond.XZ.slope) > 1E-3 or fabs(fitFirst.YZ.slope-fitSecond.YZ.slope) > 1E-3 ) continue;
+		}
 
 
 		hitCluster=calculateResiduals(hitCluster, fit);

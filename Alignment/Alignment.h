@@ -66,6 +66,8 @@ struct Alignment {
 	void updateDriftSpeed(TFile& file);
 	void updateTimeWalk(TFile& file);
 
+	void resetQuadOrigin();
+
 	int getChipNumber(const TVector3& pos) const;
 	TVector3 transformBack(const TVector3& pos) const;
 	PositionHit& transform(PositionHit& pos) const;
@@ -90,7 +92,7 @@ struct Alignment {
 		}
 		return all;
 	}
-	void drawChipEdges(bool globalFrame=true) const { //in global frame
+	void drawChipEdges(bool globalFrame=true, Color_t color=kBlack) const { //in global frame
 		for(int i=0; i<4; i++) {
 			auto corners=globalFrame ? getChipCorners(i) : chips[i].getChipCorners();
 			TPolyLine l;
@@ -98,6 +100,7 @@ struct Alignment {
 				l.SetNextPoint(corner.x(), corner.y());
 			}
 			l.SetNextPoint(corners[0].x(), corners[0].y());
+			l.SetLineColor(color);
 			l.DrawClone();
 		}
 	}
@@ -136,16 +139,16 @@ inline double getDriftSpeedFactor(TFile& file, bool draw) {
 
 
 void Alignment::updateShifts(TFile& file) {
-//	quad.updateShift(file, "quad");
-	for (int i = 0; i < 4; i++) { //skip chip0, because otherwise we would have a redundant d.o.f.
-		chips[i].updateShift(file, "chip" + std::to_string(i));
-	}
+	quad.updateShift(file, "quad");
+//	for (int i = 0; i < 4; i++) { //skip chip0, because otherwise we would have a redundant d.o.f.
+//		chips[i].updateShift(file, "chip" + std::to_string(i));
+//	}
 }
 void Alignment::updateRotations(TFile& file) {
-//	quad.updateRotation(file, "quad");
-	for (int i = 0; i < 4; i++) {
-		chips[i].updateRotation(file, "chip" + std::to_string(i));
-	}
+	quad.updateRotation(file, "quad");
+//	for (int i = 0; i < 4; i++) {
+//		chips[i].updateRotation(file, "chip" + std::to_string(i));
+//	}
 }
 
 void Alignment::updateDriftSpeed(TFile& file) {
@@ -167,6 +170,21 @@ void Alignment::updateAll(TFile& file) {
 	updateTimeWalk(file);
 
 	updateDriftSpeed(file);
+}
+
+void Alignment::resetQuadOrigin() {
+	//reset quad origin to the top left corner of chip0 (center of first pixel, last column)
+
+	//in global frame, move quad origin to upperleft corner
+	auto upperLeft = getChipCorners(0)[1];
+	quad.shift=upperLeft;
+
+	//in local frame, move all chips, such that chip0 top left is on origin
+	auto chip0shift= chips[0].getChipCorners()[1];
+	for(auto& c : chips) {
+		c.shift-=chip0shift;
+	}
+
 }
 
 inline int Alignment::getChipNumber(const TVector3& pos) const {
