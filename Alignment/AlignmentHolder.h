@@ -352,5 +352,26 @@ struct TelescopeAlignment : AlignmentHolder {
 
 };
 
+struct ToTCorrection : AlignmentHolder {
+	using AlignmentHolder::AlignmentHolder;//use Alignmentholder constructor
+	static const int ncols=256;
+	std::array<double, ncols> scaleFactor;
+	void readParameters(std::istream& in) {
+		for(int i=0; i<ncols; i++)
+			in>>scaleFactor[i];
+	}
+	void writeParameters(std::ostream& out) {
+		for(int i=0; i<ncols; i++)
+			out<<scaleFactor[i]<<" ";
+		out<<"\n";
+	}
+	std::vector<PositionHit>& correct(std::vector<PositionHit>& spaceHits) const {
+		for(auto& h : spaceHits) {
+			h.ToT/=scaleFactor[h.column];
+		}
+		return spaceHits;
+	}
+};
+
 
 #endif /* LASERDATAFITTER_ALIGNMENTHOLDER_H_ */

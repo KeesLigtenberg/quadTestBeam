@@ -433,12 +433,13 @@ TF1* fitDiffusion( TH2* h2 , std::string x="x", double z0=-1, std::string canvna
 
 }
 
-void plotDiffusionFromHist(std::string filename="combinedFit.root", std::string histogramName="ResidualByz_locExp") {
-	auto hists=chipDirectories;
-	hists.push_back("quad");
-	for(std::string chip : hists )
+void plotDiffusionFromHist(std::string filename="combinedFit.root", std::string histogramName="ResidualByz", std::string folder="locExp") {
+//	auto hists=chipDirectories;
+//	hists.push_back("quad");
+//	for(std::string chip : hists )
+	std::string chip="quad";
 	for(std::string x : {"x"}) {
-		TH1* h=getObjectFromFile<TH1>( chip+"/"+x+histogramName, filename);
+		TH1* h=getObjectFromFile<TH1>( chip+"/"+folder+"/"+x+histogramName, filename);
 		TH2* h2=dynamic_cast<TH2*>(h);
 		fitDiffusion(h2, x, -1, chip);
 	}
@@ -770,14 +771,43 @@ void combineDeformationFrequencies(
 	combined.createCombined();
 }
 
+void plotDeformationPerSlice(std::string fileName="./run672/combinedFit.root", std::string objectName="quad/locExp/xResidualByXYZ" ) {
+	auto profile3d=getObjectFromFile<TProfile3D>(objectName, fileName);
+	auto zaxis=profile3d->GetZaxis();
+
+	auto canvas=new TCanvas();
+	canvas->DivideSquare(zaxis->GetNbins());
+
+	for(int i=1; i<=zaxis->GetNbins(); i++) {
+		zaxis->SetRange(i,i);
+		canvas->cd(i);
+
+		auto prof2d=(TH2*)profile3d->Project3D( ("yx"+std::to_string(i)).c_str() );
+		prof2d->SetMaximum(0.1);
+		prof2d->SetMinimum(-0.1);
+		prof2d->Draw("colz0");
+	}
+}
+
 void compareChipEdges(std::vector<std::string> alignFiles) {
-	TH2D axis{"axis", ";x-position [mm];y-position [mm]",1000,0,29.04,1000,-14.55,25.05 };
+	TH2D axis{"axisobj", ";x-position [mm];y-position [mm]",1000,0,29.04,1000,-14.55,25.05 };
 	new TCanvas("chipEdges", "chipEdges", 850,1000)	;
 	axis.DrawClone();
-	const std::vector<Color_t> colors={kBlack,kRed,kBlue};
+	const std::vector<Color_t> colors={kBlack,kRed,kBlue,kGreen+1};
 	for(int i=0; i<alignFiles.size(); i++) {
 		Alignment alignment(alignFiles[i]);
 		alignment.drawChipEdges(false, colors[i%colors.size()]);
+	}
+	Alignment nominal(alignFiles[0]);
+	for(int i=1; i<alignFiles.size(); i++){
+		Alignment alignment(alignFiles[i]);
+		for(int j=0; j<4; j++) {
+			auto corners=alignment.chips[j].getChipCorners();
+			auto nominalCorners=nominal.chips[j].getChipCorners();
+			std::cout<<"Chip "<<j<<"\n"
+			"First pad: "<<1E3*(corners[0].X()-nominalCorners[0].X())<<", "<<1E3*(corners[0].Y()-nominalCorners[0].Y())<<"\n"
+			"Second pad: "<<1E3*(corners[1].X()-nominalCorners[1].X())<<", "<<1E3*(corners[1].Y()-nominalCorners[1].Y())<<"\n";
+		}	
 	}
 	gStyle->SetOptStat(0);
 }

@@ -278,6 +278,10 @@ void TrackCombiner::Process() {
  				quadHist->local.fill( localPosition, localResidual, h.ToT );
  				quadHist->locExp.fill(localExpectedPosition, localResidual, h.ToT);
  				hists[h.chip]->locExp.fill( localExpectedPosition, localResidual, h.ToT );
+ 				if(fabs(h.residual.z/h.error.z)<1.5) {
+ 					hists[h.chip]->tighterCuts.fill( localExpectedPosition, localResidual, h.ToT );
+ 					quadHist->tighterCuts.fill( localExpectedPosition, localResidual, h.ToT );
+ 				}
 
  				auto correctedResidual=localResidual;
  				correctedResidual.x-=deformationCorrection( h.chip, localExpectedPosition.x );//using _expected_ position.

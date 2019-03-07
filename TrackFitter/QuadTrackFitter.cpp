@@ -14,6 +14,7 @@
 #include "TH2.h"
 #include "TH3.h"
 #include "TProfile2D.h"
+#include "TProfile3D.h"
 #include "TTree.h"
 #include "TPolyLine3D.h"
 
@@ -124,6 +125,7 @@ struct ChipHistogrammer {
 		std::unique_ptr<TH2D>	positionHitMap{};
 		std::unique_ptr<TProfile2D> xResidualByPosition{}, zResidualByPosition{};
 		std::unique_ptr<TProfile2D> xResidualByXZ{}, zResidualByXZ{};
+		std::vector< std::unique_ptr<TProfile2D> > xResidualByXYZ{};
 		void fill(const Vec3& position, const Vec3& residual, double ToT) {
 			xResidual->Fill(residual.x);
 			yResidual->Fill(residual.y);
@@ -136,11 +138,13 @@ struct ChipHistogrammer {
 			zHit->Fill(position.z);
 			xResidualByPosition->Fill(position.x,position.y,residual.x);
 			zResidualByPosition->Fill(position.x,position.y,residual.z);
+			int zbin=(position.z+3)/3;
+			if(zbin>=0 and zbin<=4) xResidualByXYZ[zbin]->Fill(position.x,position.y, residual.x);
 			xResidualByXZ->Fill(position.x,position.z,residual.x);
 			zResidualByXZ->Fill(position.x,position.z,residual.z);
 		}
 		void createHistograms(const PositionRange& range);
-	} global{""}, local{"_local"}, locExp{"_locExp"}, corrected{"_corrected"};
+	} global{"_global"}, local{"_local"}, locExp{"_locExp"}, corrected{"_corrected"}, tighterCuts{"_tighterCuts"};
 	std::unique_ptr<TProfile2D> xResidualByPixel, zResidualByPixel;
 
 	void fillHit(const PositionHit& h);
@@ -186,6 +190,7 @@ ChipHistogrammer::ChipHistogrammer(std::string name, const Alignment& align) : d
 	local.createHistograms(rangeQuad);
 	locExp.createHistograms(rangeQuad);
 	corrected.createHistograms(rangeQuad);
+	tighterCuts.createHistograms(rangeQuad);
 
 	xResidualByPixel=std::unique_ptr<TProfile2D>(new TProfile2D{"xResidualByPixel", "mean x-residual by pixel;Columns;Rows", 256,0,256,256,0,256});
 	zResidualByPixel=std::unique_ptr<TProfile2D>(new TProfile2D{"zResidualByPixel", "mean z-residual by pixel;Columns;Rows", 256,0,256,256,0,256});
@@ -197,38 +202,46 @@ void ChipHistogrammer::residualHistograms::createHistograms(const PositionRange&
 	using namespace std;
 	const int nBins=160, nBinsZ=150;
 
+	auto startDir=gDirectory;
+	startDir->mkdir( name.substr(1,std::string::npos).c_str() )->cd();
 
-	xResidual=unique_ptr<TH1D>(new TH1D{("xResidual"+name).c_str(), "x-residual;x-residual [mm]; Hits", nBins,-2,2});
-	yResidual=unique_ptr<TH1D>(new TH1D{("yResidual"+name).c_str(), "y-residual;y-residual [mm]; Hits", nBins,-2,2});
-	zResidual=unique_ptr<TH1D>(new TH1D{("zResidual"+name).c_str(), "z-residual;z-residual [mm]; Hits", nBins,-4,4});
+	xResidual=unique_ptr<TH1D>(new TH1D{("xResidual"), "x-residual;x-residual [mm]; Hits", nBins,-2,2});
+	yResidual=unique_ptr<TH1D>(new TH1D{("yResidual"), "y-residual;y-residual [mm]; Hits", nBins,-2,2});
+	zResidual=unique_ptr<TH1D>(new TH1D{("zResidual"), "z-residual;z-residual [mm]; Hits", nBins,-4,4});
 
-	xResidualByz=std::unique_ptr<TH2D>(new TH2D{("xResidualByz"+name).c_str(), "x-residuals as a function of drift distance;Drift distance [mm];x-residual [mm]", nBinsZ,-1,14,nBins,-2,2});
-	yResidualByz=std::unique_ptr<TH2D>(new TH2D{("yResidualByz"+name).c_str(), "y-residuals as a function of drift distance;Drift distance [mm];y-residual [mm]", nBinsZ,-1,14,nBins,-2,2});
-	zResidualByz=std::unique_ptr<TH2D>(new TH2D{("zResidualByz"+name).c_str(), "z-residuals as a function of drift distance;Drift distance [mm];z-residual [mm]", nBinsZ,-1,14,nBins,-2,2});
-	zResidualByzByToT=std::unique_ptr<TH3D>(new TH3D{("zResidualByzByToT"+name).c_str(), "z-residuals as a function of drift distance;Drift distance [mm];z-residual [mm];ToT [#mus]", nBinsZ,-1,14,nBins,-2,2,100,0,2.5});
+	xResidualByz=std::unique_ptr<TH2D>(new TH2D{("xResidualByz"), "x-residuals as a function of drift distance;Drift distance [mm];x-residual [mm]", nBinsZ,-1,14,nBins,-2,2});
+	yResidualByz=std::unique_ptr<TH2D>(new TH2D{("yResidualByz"), "y-residuals as a function of drift distance;Drift distance [mm];y-residual [mm]", nBinsZ,-1,14,nBins,-2,2});
+	zResidualByz=std::unique_ptr<TH2D>(new TH2D{("zResidualByz"), "z-residuals as a function of drift distance;Drift distance [mm];z-residual [mm]", nBinsZ,-1,14,nBins,-2,2});
+	zResidualByzByToT=std::unique_ptr<TH3D>(new TH3D{("zResidualByzByToT"), "z-residuals as a function of drift distance;Drift distance [mm];z-residual [mm];ToT [#mus]", nBinsZ,-1,14,nBins,-2,2,100,0,2.5});
 
-	zHit = unique_ptr<TH1D>(new TH1D{ ("zHit"+name).c_str(), "z-position of hits;z [mm]; Hits", 200,-10,40 });
+	zHit = unique_ptr<TH1D>(new TH1D{ ("zHit"), "z-position of hits;z [mm]; Hits", 200,-10,40 });
 	double xmax=range.xmax, xmin=range.xmin, ymin=range.ymin, ymax=range.ymax;
-	positionHitMap=unique_ptr<TH2D>(new TH2D{ ("positionHitMap"+name).c_str(), "Hitmap with positions;x-position [mm];y-position [mm]",
+	positionHitMap=unique_ptr<TH2D>(new TH2D{ ("positionHitMap"), "Hitmap with positions;x-position [mm];y-position [mm]",
 		int((xmax-xmin)/.055),xmin,xmax,int((ymax-ymin)/.055),ymin, ymax});
 
-	xResidualByPosition=std::unique_ptr<TProfile2D>(new TProfile2D{ ("xResidualByPosition"+name).c_str(), "mean x-residual by position;x [mm]; y[mm]; mean x-residual [mm]",
+	xResidualByPosition=std::unique_ptr<TProfile2D>(new TProfile2D{ ("xResidualByPosition"), "mean x-residual by position;x [mm]; y[mm]; mean x-residual [mm]",
 		int((xmax-xmin)/.055),xmin,xmax,int((ymax-ymin)/.055),ymin, ymax});
-	zResidualByPosition=std::unique_ptr<TProfile2D>(new TProfile2D{ ("zResidualByPosition"+name).c_str(), "mean z-residual by position;x [mm]; y[mm]; mean z-residual [mm]",
+	zResidualByPosition=std::unique_ptr<TProfile2D>(new TProfile2D{ ("zResidualByPosition"), "mean z-residual by position;x [mm]; y[mm]; mean z-residual [mm]",
 		int((xmax-xmin)/.055),xmin,xmax,int((ymax-ymin)/.055),ymin, ymax});
 	for(auto prof2d : {&xResidualByPosition, &zResidualByPosition} ) {
 		(*prof2d)->SetMinimum(-0.1), (*prof2d)->SetMaximum(0.1);
 	}
 
+	for(int i=0; i<5; i++) {
+		xResidualByXYZ[i]=std::unique_ptr<TProfile2D>(new TProfile2D{ ("xResidualByXYZ"+to_string(i)).c_str(), "mean x-residual by XYZ;x [mm]; y[mm];z [mm]; mean x-residual [mm]",
+			int((xmax-xmin)/.055),xmin,xmax,int((ymax-ymin)/.055),ymin, ymax});
+	}
+
 	double zmin=-10, zmax=40;
-	xResidualByXZ=std::unique_ptr<TProfile2D>(new TProfile2D{ ("xResidualByXZ"+name).c_str(), "mean x-residual by XZ;x [mm]; y[mm]; mean x-residual [mm]",
+	xResidualByXZ=std::unique_ptr<TProfile2D>(new TProfile2D{ ("xResidualByXZ"), "mean x-residual by XZ;x [mm]; y[mm]; mean x-residual [mm]",
 		int((xmax-xmin)/.055),xmin,xmax,200,zmin, zmax});
-	zResidualByXZ=std::unique_ptr<TProfile2D>(new TProfile2D{ ("zResidualByXZ"+name).c_str(), "mean z-residual by XZ;x [mm]; y[mm]; mean z-residual [mm]",
+	zResidualByXZ=std::unique_ptr<TProfile2D>(new TProfile2D{ ("zResidualByXZ"), "mean z-residual by XZ;x [mm]; y[mm]; mean z-residual [mm]",
 		int((xmax-xmin)/.055),xmin,xmax,200,zmin, zmax});
 	for(auto prof2d : {&xResidualByXZ, &zResidualByXZ} ) {
 		(*prof2d)->SetMinimum(-0.2), (*prof2d)->SetMaximum(0.2);
 	}
 
+	startDir->cd();
 }
 
 void ChipHistogrammer::fillHit(const PositionHit& h) {

@@ -33,6 +33,7 @@ struct Alignment {
 	AlignValueHolder<double> t0Offset{"T0OFFSET"};
 	HitErrorCalculator hitErrors;
 	TelescopeAlignment mimosa;
+	std::array<ToTCorrection,4> totCorrections{"TOTCORRECTION0","TOTCORRECTION1","TOTCORRECTION2","TOTCORRECTION3"};
 
 	Alignment(std::string filename) {
 		read(filename);
