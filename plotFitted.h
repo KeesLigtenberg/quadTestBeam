@@ -247,7 +247,7 @@ void plotHitAverage(std::string file="fitted.root") {
 	drawChipEdges();
 }
 
-void plotTimeWalkResiduals( std::string filename="fitted.root" ) {
+void plotResidualsTimeWalk( std::string filename="fitted.root" ) {
 
 	auto uncorrected=getObjectFromFile<TH2>("quad/zResidualByToT", filename);
 	TH1* uncorredtedHist=uncorrected->ProjectionY();
@@ -347,7 +347,22 @@ void combineFittedTimeWalkForChips(std::string filename="combinedFit.root", std:
 	for(int i=0;i<4;i++) {
 		canv->cd(i+1);
 		auto h=plotFittedTimeWalk(filename, chipDirectories[i]+"/"+object);
-		comb.add(h, "chip "+to_string(i+1) );
+		//comb.add(h, "chip "+to_string(i+1) );
+	}
+	//comb.createCombined();
+}
+
+
+void combineTimeWalkResiduals(std::string filename="combinedFit.root", std::string object="zResidualByToTCorrected") {
+	//auto canv=new TCanvas("canvas", "combined canvas", 1000,1000);
+	//canv->Divide(2,2);
+	HistogramCombiner comb{"combinedTWResiduals"};
+	for(int i=0;i<4;i++) {
+		//canv->cd(i+1);
+		auto corrected=getObjectFromFile<TH2>(chipDirectories[i]+"/"+object, filename);
+		corrected->FitSlicesY();
+		auto means=dynamic_cast<TH1*>( gDirectory->Get("zResidualByToTCorrected_1") );
+		comb.add(means, "chip "+to_string(i+1) );
 	}
 	comb.createCombined();
 }
@@ -356,13 +371,14 @@ void combineFittedTimeWalkForChips(std::string filename="combinedFit.root", std:
 //fitSlicesY with specification of range
 TH1* fitDiffusionSlices(TH2* h2, std::string x="z") {
 //	TF1* gaus=new TF1("gaus","gaus(0)", -2,2);
-	TF1* gausRange=new TF1("gausRange","gaus(0)", -0.6,0.6);
+	TF1* gausRange=new TF1("gausRange","gaus(0)", -0.5,0.5);
 	gausRange->SetParameters(4E4,0.05,0.22);
 //	TF1* exGaus=new TF1("exGaus", "[c]*[l]/2*exp([l]/2*(2*[m]+[l]*[s]*[s]-2*x))*TMath::Erfc( ([m]+[l]*[s]*[s]-x)/sqrt(2)/[s] )", -2, 2); //Exponentially modified gaussian distribution (see wiki)
 //	exGaus->SetParameters(2E4,3.1,-0.25,0.2); // Constant, Lambda, Mean, Sigma
 	//exGaus->FixParameter(1,3.1);
 
-	h2->FitSlicesY(x=="z" ? gausRange : gausRange, 0/*firstbin*/, -1/*lastbin*/, 30/*min number of entries*/, "QNR");
+//	h2->FitSlicesY(x=="z" ? gausRange : gausRange, 0/*firstbin*/, -1/*lastbin*/, 30/*min number of entries*/, "QNR");
+	h2->FitSlicesY();
 
 	return dynamic_cast<TH1*>(gDirectory->Get( (h2->GetName()+std::string("_2")).c_str() ));
 }
@@ -370,6 +386,7 @@ TH1* fitDiffusionSlices(TH2* h2, std::string x="z") {
 
 TF1* fitDiffusion( TH2* h2 , std::string x="x", double z0=-1, std::string canvname="canv") {
 	double zmax=11;
+	std::string LorT=x=="x" ? "T" : x=="z" ? "L" : x;
 
 	TF1* drift=new TF1("drift", ("sqrt( pow([#sigma_{"+x+"0}],2) + pow([D_{"+x+"}],2)/10*(x-[z0]) )").c_str(), z0, zmax);
 	new TCanvas((canvname+"_"+x).c_str(), (canvname+"_"+x).c_str(), 800,600);
@@ -387,7 +404,7 @@ TF1* fitDiffusion( TH2* h2 , std::string x="x", double z0=-1, std::string canvna
 	if(!h2_2) { auto msg="could not get results from fit\n"; std::cerr<<msg; throw msg; }
 
 	h2_2->GetXaxis()->SetTitle("z-position [mm]");
-	h2_2->GetYaxis()->SetTitle( ("#sigma_{"+x+"} from fit to track-residual [mm]").c_str() );				
+	h2_2->GetYaxis()->SetTitle( ("#sigma_{"+x+"} from fit to track-residual [mm]").c_str() );
 	increaseAxisSize(h2_2, 0.05);	
 	h2_2->GetYaxis()->SetRangeUser(0, x=="x"?0.5:0.6 );
 	h2_2->GetXaxis()->SetRangeUser(z0,zmax);
@@ -415,10 +432,10 @@ TF1* fitDiffusion( TH2* h2 , std::string x="x", double z0=-1, std::string canvna
 	//nicer stat pane
 	gStyle->SetOptFit(false);
 	auto stats=new StatsWrapper();
-	stats->add("D_{"+x+"}",  drift->GetParameter(1)*1E3, 0, "#mum/#sqrt{cm}" );
+	stats->add("D_{"+LorT+"}",  drift->GetParameter(1)*1E3, 0, "#mum/#sqrt{cm}" );
 	if(x!="x") stats->add("#sigma_{"+x+"0}" ,  drift->GetParameter(0)*1E3, 0, "#mum" );
 	stats->add("z0" ,  drift->GetParameter(2), 2, "mm" );
-	stats->addChiSquare(*drift);
+	//stats->addChiSquare(*drift);
 	stats->draw();
 	
 	//plot residuals
@@ -433,15 +450,15 @@ TF1* fitDiffusion( TH2* h2 , std::string x="x", double z0=-1, std::string canvna
 
 }
 
-void plotDiffusionFromHist(std::string filename="combinedFit.root", std::string histogramName="ResidualByz", std::string folder="locExp") {
-//	auto hists=chipDirectories;
-//	hists.push_back("quad");
-//	for(std::string chip : hists )
-	std::string chip="quad";
-	for(std::string x : {"x"}) {
-		TH1* h=getObjectFromFile<TH1>( chip+"/"+folder+"/"+x+histogramName, filename);
+void plotDiffusionFromHist(std::string filename="combinedFit.root", std::string histogramName="locExp/xResidualByz", std::string dir="x") {
+	auto hists=chipDirectories;
+	hists.push_back("quad");
+	for(std::string chip : hists )
+//	std::string chip="quad";
+	{
+		TH1* h=getObjectFromFile<TH1>( chip+"/"+histogramName, filename);
 		TH2* h2=dynamic_cast<TH2*>(h);
-		fitDiffusion(h2, x, -1, chip);
+		fitDiffusion(h2, dir, -1, chip);
 	}
 }
 
@@ -799,7 +816,9 @@ void compareChipEdges(std::vector<std::string> alignFiles) {
 		alignment.drawChipEdges(false, colors[i%colors.size()]);
 	}
 	Alignment nominal(alignFiles[0]);
+	std::cout<<"\n";
 	for(int i=1; i<alignFiles.size(); i++){
+		std::cout<<alignFiles[i]<<"\n";
 		Alignment alignment(alignFiles[i]);
 		for(int j=0; j<4; j++) {
 			auto corners=alignment.chips[j].getChipCorners();
@@ -808,6 +827,7 @@ void compareChipEdges(std::vector<std::string> alignFiles) {
 			"First pad: "<<1E3*(corners[0].X()-nominalCorners[0].X())<<", "<<1E3*(corners[0].Y()-nominalCorners[0].Y())<<"\n"
 			"Second pad: "<<1E3*(corners[1].X()-nominalCorners[1].X())<<", "<<1E3*(corners[1].Y()-nominalCorners[1].Y())<<"\n";
 		}	
+		std::cout<<"\n";
 	}
 	gStyle->SetOptStat(0);
 }

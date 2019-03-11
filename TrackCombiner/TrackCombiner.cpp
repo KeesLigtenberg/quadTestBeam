@@ -103,7 +103,7 @@ void TrackCombiner::Process() {
 
 
 	for(int telescopeEntryNumber=0,tpcEntryNumber=0; //5000000, 2308829
-			telescopeEntryNumber<2E6 //telescopeFitter.nEvents//1000000
+			telescopeEntryNumber<1E6 //telescopeFitter.nEvents//1000000
 			;) {
 //		triggerStatusHistogram.reset();
 
@@ -189,7 +189,7 @@ void TrackCombiner::Process() {
  	 			for(auto& h : quadHitsWithResidual) {
  	 				Vec3 timepixExpectedPos{h.position.x, h.position.y, timepixFit.yAt(h.position.z)};
  	 				h.error=alignment.hitErrors.hitError( alignment.quad.rotateAndShiftBack(timepixExpectedPos).z );
-					h=flagResidualPull(h, {2,5,3} );
+					h=flagResidualPull(h, {3,5,3} );
  	 			}
 
 
@@ -271,8 +271,8 @@ void TrackCombiner::Process() {
  				auto localExpectedPosition=alignment.quad.rotateAndShiftBack(expectedPosition);
  				auto localResidual=alignment.quad.rotateBack(h.residual, {0,0,0});
 
- 				hists[h.chip]->fillTimewalk(localResidual.z, h.ToT, alignment.timeWalk);
- 				quadHist->fillTimewalk(localResidual.z, h.ToT, alignment.timeWalk);
+ 				hists[h.chip]->fillTimewalk(localResidual.z, h.ToT, alignment.timeWalks[h.chip]);
+ 				quadHist->fillTimewalk(localResidual.z, h.ToT, alignment.timeWalks[h.chip]);
 
  				hists[h.chip]->local.fill( localPosition, localResidual, h.ToT);
  				quadHist->local.fill( localPosition, localResidual, h.ToT );

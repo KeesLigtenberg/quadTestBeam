@@ -65,6 +65,7 @@ namespace { //todo:move to cpp file
 
 struct AlignmentHolder {
 	AlignmentHolder(std::string name) : name(name) {}
+	AlignmentHolder(const char* name) : name(name) {}
 	virtual ~AlignmentHolder() {}
 
 	void read(std::istream&);
@@ -241,7 +242,8 @@ void ShiftAndRotateAlignment::updateShift(TFile& file,const std::string& histNam
 			std::cout << "skipped " << histName << " because less than " << minEntries
 					<< " in histogram\n";
 		} else {
-			double mean = hist->GetMean(); //getMeanFromGausCoreFit(*hist);
+			const double learningRate=1;
+			double mean = learningRate*hist->GetMean(); //getMeanFromGausCoreFit(*hist);
 			shift[i] -= mean;
 			std::cout << "update " << histName << " by " << mean << "\n";
 		}
@@ -257,8 +259,8 @@ void ShiftAndRotateAlignment::updateShift(TFile& file, const std::string& dirNam
 void ChipAlignment::updateShift(TFile& file, const std::string& dirName) {
 	std::cout<<dirName<<"\n";
 	for (int i = 0; i < 3; i++) {
-		const std::string histNames[] = { "xResidual_local", "yResidual_local", "zResidual_local" };
-		ShiftAndRotateAlignment::updateShift(file, dirName+"/"+histNames[i], i);
+		const std::string histNames[] = { "xResidual", "yResidual", "zResidual" };
+		ShiftAndRotateAlignment::updateShift(file, dirName+"/local/"+histNames[i], i);
 	}
 }
 
@@ -283,8 +285,9 @@ void ShiftAndRotateAlignment::updateRotation(TFile& file, std::string dirName) {
 		auto xHist=getObjectFromFile<TH1>(dirName+"/"+x[i]+"Rotation", &file);
 		const int minEntries=10000;
 		if(xHist->GetEntries()<minEntries)  {std::cout<<"skipped "<<dirName<<" "<<x[i]<<" rotation because less than "<<minEntries<<" in histogram\n"; continue;}
-		std::cout<<"update "<<x[i]<<" rotation by "<<xHist->GetMean()<<"\n";
-		rotation[i]+=xHist->GetMean();
+		const double learningRate=0.5;
+		std::cout<<"update "<<x[i]<<" rotation by "<<learningRate<<"*"<<xHist->GetMean()<<"\n";
+		rotation[i]+=learningRate*xHist->GetMean();
 	}
 
 }
@@ -365,9 +368,12 @@ struct ToTCorrection : AlignmentHolder {
 			out<<scaleFactor[i]<<" ";
 		out<<"\n";
 	}
+	PositionHit& correct(PositionHit& h) const {
+		h.ToT/=scaleFactor[h.column];
+		return h;
+	}
 	std::vector<PositionHit>& correct(std::vector<PositionHit>& spaceHits) const {
 		for(auto& h : spaceHits) {
-			h.ToT/=scaleFactor[h.column];
 		}
 		return spaceHits;
 	}

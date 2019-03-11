@@ -28,12 +28,12 @@ void updateAlignmentFromFile(std::string resultFile="combinedFit.root", std::str
 	Alignment alignment(alignFile);
 	TFile file(resultFile.c_str(), "READ");
 //		alignment.updateAll(file);
-	alignment.updateShifts(file);
-//		alignment.quad.updateShift(file,"quad");
-	alignment.updateRotations(file);
-//		alignment.quad.updateRotation(file,"quad");
+//	alignment.updateShifts(file);
+		alignment.quad.updateShift(file,"quad/global");
+//	alignment.updateRotations(file);
+		alignment.quad.updateRotation(file,"quad");
 //		alignment.updateTimeWalk(file);
-		alignment.updateDriftSpeed(file);
+//		alignment.updateDriftSpeed(file);
 		alignment.write("align.dat");
 }
 

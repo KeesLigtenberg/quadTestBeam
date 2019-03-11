@@ -28,12 +28,12 @@
 struct Alignment {
 	std::array<ChipAlignment,4> chips{{0,1,2,3}};
 	ShiftAndRotateAlignment quad{"QUAD"};
-	TimeWalkCorrector timeWalk;
+	std::array<TimeWalkCorrector,4> timeWalks{ {"TIMEWALKPARAMETERS0", "TIMEWALKPARAMETERS1", "TIMEWALKPARAMETERS2", "TIMEWALKPARAMETERS3"} };
 	AlignValueHolder<double> driftSpeed{"DRIFTSPEED"};
 	AlignValueHolder<double> t0Offset{"T0OFFSET"};
 	HitErrorCalculator hitErrors;
 	TelescopeAlignment mimosa;
-	std::array<ToTCorrection,4> totCorrections{"TOTCORRECTION0","TOTCORRECTION1","TOTCORRECTION2","TOTCORRECTION3"};
+	std::array<ToTCorrection,4> totCorrections{ {"TOTCORRECTION0","TOTCORRECTION1","TOTCORRECTION2","TOTCORRECTION3"} };
 
 	Alignment(std::string filename) {
 		read(filename);
@@ -43,11 +43,12 @@ struct Alignment {
 		if(not inFile) std::cerr<<"Could not open "<<filename<<"\n";
 		for(auto& c : chips) c.read(inFile);
 		quad.read(inFile);
-		timeWalk.read(inFile);
+		for(auto& t: timeWalks) t.read(inFile);
 		driftSpeed.read(inFile);
 		t0Offset.read(inFile);
 		hitErrors.read(inFile);
 		mimosa.read(inFile);
+		for(auto& t : totCorrections) t.read(inFile);
 	}
 	void write(std::string filename) {
 		std::ofstream outFile(filename);
@@ -55,11 +56,12 @@ struct Alignment {
 		outFile.precision(10);
 		for(auto& c : chips) c.write(outFile);
 		quad.write(outFile);
-		timeWalk.write(outFile);
+		for(auto& t: timeWalks) t.write(outFile);
 		driftSpeed.write(outFile);
 		t0Offset.write(outFile);
 		hitErrors.write(outFile);
 		mimosa.write(outFile);
+		for(auto& t : totCorrections) t.write(outFile);
 	}
 	void updateAll(TFile& ) ;
 	void updateShifts(TFile& file);
@@ -111,8 +113,8 @@ struct Alignment {
 inline double getDriftSpeedFactor(TFile& file, bool draw) {
 	//calculate driftspeed
 //	std::cout<<"get zResidualByz from quad\n";
-	std::string histogramName="zResidualByz_locExp";
-	TH2D* zResidualByz = getObjectFromFile<TH2D>("quad/"+histogramName, &file);
+	std::string histogramName="zResidualByz";
+	TH2D* zResidualByz = getObjectFromFile<TH2D>("quad/locExp/"+histogramName, &file);
 
 //	std::cout<<"fit slices!\n";
 	TF1* gausRange=new TF1("gausRange","gaus(0)", -3,3);
@@ -140,16 +142,16 @@ inline double getDriftSpeedFactor(TFile& file, bool draw) {
 
 
 void Alignment::updateShifts(TFile& file) {
-	quad.updateShift(file, "quad");
-//	for (int i = 0; i < 4; i++) { //skip chip0, because otherwise we would have a redundant d.o.f.
-//		chips[i].updateShift(file, "chip" + std::to_string(i));
-//	}
+//	quad.updateShift(file, "quad");
+	for (int i = 0; i < 4; i++) { //skip chip0, because otherwise we would have a redundant d.o.f.
+		chips[i].updateShift(file, "chip" + std::to_string(i));
+	}
 }
 void Alignment::updateRotations(TFile& file) {
-	quad.updateRotation(file, "quad");
-//	for (int i = 0; i < 4; i++) {
-//		chips[i].updateRotation(file, "chip" + std::to_string(i));
-//	}
+//	quad.updateRotation(file, "quad");
+	for (int i = 0; i < 4; i++) {
+		chips[i].updateRotation(file, "chip" + std::to_string(i));
+	}
 }
 
 void Alignment::updateDriftSpeed(TFile& file) {
@@ -160,8 +162,10 @@ void Alignment::updateDriftSpeed(TFile& file) {
 
 
 void Alignment::updateTimeWalk(TFile& file) {
-	TH2D* uncorrected=getObjectFromFile<TH2D>("quad/zResidualByToT", &file);
-	timeWalk.update(uncorrected);
+	for(unsigned i=0; i<timeWalks.size(); i++) {
+		TH2D* uncorrected=getObjectFromFile<TH2D>("chip"+std::to_string(i)+"/zResidualByToT", &file);
+		timeWalks[i].update(uncorrected);
+	}
 }
 
 void Alignment::updateAll(TFile& file) {

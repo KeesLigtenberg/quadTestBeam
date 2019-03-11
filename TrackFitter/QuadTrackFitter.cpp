@@ -175,7 +175,7 @@ ChipHistogrammer::ChipHistogrammer(std::string name, const Alignment& align) : d
 
 	xRotation=unique_ptr<TH1D>(new TH1D{"xRotation", "x-rotation;x-rotation [rad.]; Hits", 100,-0.5,0.5});
 	yRotation=unique_ptr<TH1D>(new TH1D{"yRotation", "y-rotation;y-rotation [rad.]; Hits", 100,-0.5,0.5});
-	zRotation=unique_ptr<TH1D>(new TH1D{"zRotation", "z-rotation;z-rotation [rad.]; Hits", 100,-0.2,0.2});
+	zRotation=unique_ptr<TH1D>(new TH1D{"zRotation", "z-rotation;z-rotation [rad.]; Hits", 100,-0.05,0.05});
 
 
 	zResidualByToT=std::unique_ptr<TH2D>(new TH2D{"zResidualByToT", "z-residual by ToT;ToT [#mus]; z-residual [mm]", 100,0,2.5, 200,-5,5});
@@ -203,7 +203,10 @@ void ChipHistogrammer::residualHistograms::createHistograms(const PositionRange&
 	const int nBins=160, nBinsZ=150;
 
 	auto startDir=gDirectory;
-	startDir->mkdir( name.substr(1,std::string::npos).c_str() )->cd();
+	if(!startDir) std::cout<<"current directory is not valid!\n";
+	auto newDir=startDir->mkdir( name.substr(1,std::string::npos).c_str() );
+	if(!newDir) std::cout<<"could not make directory: " <<name<<"\n";
+	newDir->cd();
 
 	xResidual=unique_ptr<TH1D>(new TH1D{("xResidual"), "x-residual;x-residual [mm]; Hits", nBins,-2,2});
 	yResidual=unique_ptr<TH1D>(new TH1D{("yResidual"), "y-residual;y-residual [mm]; Hits", nBins,-2,2});
@@ -228,8 +231,8 @@ void ChipHistogrammer::residualHistograms::createHistograms(const PositionRange&
 	}
 
 	for(int i=0; i<5; i++) {
-		xResidualByXYZ[i]=std::unique_ptr<TProfile2D>(new TProfile2D{ ("xResidualByXYZ"+to_string(i)).c_str(), "mean x-residual by XYZ;x [mm]; y[mm];z [mm]; mean x-residual [mm]",
-			int((xmax-xmin)/.055),xmin,xmax,int((ymax-ymin)/.055),ymin, ymax});
+		xResidualByXYZ.emplace_back( new TProfile2D{ ("xResidualByXYZ"+to_string(i)).c_str(), "mean x-residual by XYZ;x [mm]; y[mm];z [mm]; mean x-residual [mm]",
+			int((xmax-xmin)/.055),xmin,xmax,int((ymax-ymin)/.055),ymin, ymax} );
 	}
 
 	double zmin=-10, zmax=40;
@@ -267,12 +270,12 @@ void ChipHistogrammer::fillRotation(const PositionHit& h, const TVector3& COM) {
 	xRotation->Fill(phix, perp2x);
 
 	//y
-//	double perp2y=d.Perp2({0,1,0});
-//	double phiy=(d.x()*h.residual.z-d.z()*h.residual.x)/perp2y;
-//	yRotation->Fill(phiy, perp2y);
+	double perp2y=d.Perp2({0,1,0});
+	double phiy=(d.x()*h.residual.z-d.z()*h.residual.x)/perp2y;
+	yRotation->Fill(phiy, perp2y);
 	//for the moment, until error are included, use only x residuals in y rotation!
-	double phiy=-h.residual.x/d.z();
-	yRotation->Fill(phiy,d.z()*d.z());
+//	double phiy=-h.residual.x/d.z();
+//	yRotation->Fill(phiy,d.z()*d.z());
 
 	//z
 	double phi=(d.y()*h.residual.x-d.x()*h.residual.y)/d.Perp2();
@@ -299,7 +302,8 @@ std::vector<PositionHit> QuadTrackFitter::getSpaceHits(const Alignment& alignmen
 	posHits = convertHitsQuad(reader.chip, driftSpeed, t0Offset);
 	for (auto& h : posHits) {
 		//apply alignment
-		h = alignment.timeWalk.correct(h);
+		h = alignment.totCorrections[h.chip].correct(h);
+		h = alignment.timeWalks[h.chip].correct(h);
 		h = alignment.transform(h);
 		//			if(h.position.z<alignment.hitErrors.z0) h.flag=PositionHit::Flag::smallz;
 		h.error = alignment.hitErrors.hitError( alignment.quad.rotateAndShiftBack(h.position).z );
@@ -370,10 +374,10 @@ void QuadTrackFitter::Loop(std::string outputFile,const Alignment& alignment) {
 		for(auto& h : posHits) {
 
 			if(h.flag==PositionHit::Flag::highResidualxy) continue;
-			hists[h.chip].fillTimewalk(h.ToT, h.residual.z, alignment.timeWalk);
-			quad.fillTimewalk(h.ToT, h.residual.z, alignment.timeWalk);
+			hists[h.chip].fillTimewalk(h.ToT, h.residual.z, alignment.timeWalks[h.chip]);
+			quad.fillTimewalk(h.ToT, h.residual.z, alignment.timeWalks[h.chip]);
 			zResidualByToTCorrected->Fill(h.ToT*25E-3,h.residual.z);
-			zResidualByToT->Fill(h.ToT*25E-3,h.residual.z+alignment.timeWalk.getCorrection(h.ToT));
+			zResidualByToT->Fill(h.ToT*25E-3,h.residual.z+alignment.timeWalks[h.chip].getCorrection(h.ToT));
 
 			if(h.flag!=PositionHit::Flag::valid) continue;
 

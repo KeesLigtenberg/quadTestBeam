@@ -21,7 +21,7 @@
 
 struct TimeWalkCorrector : AlignmentHolder {
 public:
-	TimeWalkCorrector() : AlignmentHolder("TIMEWALKPARAMETERS") {}
+	using AlignmentHolder::AlignmentHolder;
 
 	std::vector<PositionHit>&  correct(std::vector<PositionHit>& spaceHit) const;
 	PositionHit&  correct(PositionHit& spaceHit) const;
@@ -115,13 +115,15 @@ void TimeWalkCorrector::update(TH2D* th2) {
 
 //	means->Fit(fun.get(), "QS", "", 0,2.5);
 	means->Fit(fun.get(), "QS", "", minToT, 2.5);
+	const double learningRate=0.5;
 	if(fun->GetNpar()!= int(params.size())) {std::cerr<<"number of parameters in fit and in file does not match!\n"; return; };
 //	params[0]=1; //first parameter is offset, so do not update!
 	for(int i=1; i<fun->GetNpar(); i++) {
 		std::cout<<"update parameter "<<fun->GetParName(i)<<" from "<<params[i]<<" to "<<fun->GetParameter(i)<<"\n";
-		params[i]=fun->GetParameter(i);
+		params[i]+= learningRate*(fun->GetParameter(i)-params[i]);
 	}
-	gPad->Update(); std::cin.get();
+	gPad->Update();
+//	std::cin.get();
 }
 
 
