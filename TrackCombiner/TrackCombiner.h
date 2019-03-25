@@ -39,6 +39,7 @@ private:
 
 	struct TreeEntry {
 		std::vector<FitResult3D> telescopeFits;
+		std::vector<FitResult3D> timepixFits;
 		Vec3 meanQuadPosition;
 		std::vector<int> nHitsPerChip;
 		std::vector<PositionHit> quadHits;

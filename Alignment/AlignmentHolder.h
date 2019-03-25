@@ -61,6 +61,19 @@ namespace { //todo:move to cpp file
 		return intersects;
 	}
 
+	bool isInArea(TVector3 pos, std::vector<TVector3> corners) {
+		//if pos has 1 crossing with line segment to infinite it is inside, if 0 or 2 then not inside
+		for(auto& c:corners) c.SetZ(0);
+		TVector3 inf{13249,13499,0};//should be actually infinity. Note prime: because otherwise a line through a corner is an option.
+		pos.SetZ(0);
+		int nCrossings=0;
+		nCrossings+=doesIntersect(corners.front(), corners.back(), pos,inf);
+		for(unsigned i=0; i<corners.size()-1; i++) {
+			nCrossings+=doesIntersect(corners[i], corners[i+1], pos,inf);
+		}
+		return nCrossings==1;
+	}
+
 }
 
 struct AlignmentHolder {
@@ -109,7 +122,7 @@ struct ShiftAndRotateAlignment : AlignmentHolder {
 	TVector3 COM{}; //relative COM (before shift)
 	TVector3 rotation{};
 
-	TVector3 getCOMGlobal() const {
+	TVector3 getShiftedCOM() const {
 		return COM+shift;
 	}
 
@@ -157,8 +170,8 @@ struct ShiftAndRotateAlignment : AlignmentHolder {
 
 	virtual void updateShift(TFile&, const std::string& dirName);
 	void updateShift(TFile& file, const std::string& histName, int i);
-	void updateCOM(TFile& file, std::string dirName);
-	void updateRotation(TFile&, std::string dirName);
+	virtual void updateCOM(TFile& file, std::string dirName);
+	virtual void updateRotation(TFile&, std::string dirName);
 
 private:
 	void readParameters(std::istream& in) {
@@ -197,6 +210,7 @@ struct ChipAlignment : ShiftAndRotateAlignment {
 	}
 
 	virtual void updateShift(TFile&, const std::string& dirName);
+//	virtual void updateRotation(TFile& file, std::string dirName);
 
 	std::array<TVector3,4> getChipCorners() const { //fixme
 		std::array<TVector3,4> corners={//chip0: upper-left, upper-right, bottom-left, bottom-right
@@ -223,7 +237,7 @@ struct ChipAlignment : ShiftAndRotateAlignment {
 		//if pos has 1 crossing with line segment to infinite it is inside, if 0 or 2 then not inside
 		auto corners=getChipCorners();
 		for(auto& c:corners) c.SetZ(0);
-		TVector3 inf{0,0,0};
+		TVector3 inf{-15867,-47643,0};
 		pos.SetZ(0);
 		int nCrossings=0;
 		nCrossings+=doesIntersect(corners[0], corners[3], pos,inf);
@@ -289,8 +303,19 @@ void ShiftAndRotateAlignment::updateRotation(TFile& file, std::string dirName) {
 		std::cout<<"update "<<x[i]<<" rotation by "<<learningRate<<"*"<<xHist->GetMean()<<"\n";
 		rotation[i]+=learningRate*xHist->GetMean();
 	}
-
 }
+//void ChipAlignment::updateRotation(TFile& file, std::string dirName) {
+//	//Find rotation
+//	for(int i=0; i<3; i++) {
+//		const std::array<std::string,3> x={"x", "y", "z"};
+//		auto xHist=getObjectFromFile<TH1>(dirName+"/"+x[i]+"Rotation", &file);
+//		const int minEntries=10000;
+//		if(xHist->GetEntries()<minEntries)  {std::cout<<"skipped "<<dirName<<" "<<x[i]<<" rotation because less than "<<minEntries<<" in histogram\n"; continue;}
+//		const double learningRate=0.5;
+//		std::cout<<"update "<<x[i]<<" rotation by "<<learningRate<<"*"<<xHist->GetMean()<<"\n";
+//		rotation[i]+=learningRate*xHist->GetMean();
+//	}
+//}
 
 struct HitErrorCalculator : AlignmentHolder {
 	HitErrorCalculator() : AlignmentHolder("HITERROR") {}

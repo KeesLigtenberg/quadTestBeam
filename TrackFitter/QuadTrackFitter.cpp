@@ -138,7 +138,8 @@ struct ChipHistogrammer {
 			zHit->Fill(position.z);
 			xResidualByPosition->Fill(position.x,position.y,residual.x);
 			zResidualByPosition->Fill(position.x,position.y,residual.z);
-			int zbin=(position.z+3)/3;
+
+			int zbin=(position.z+1)/2;
 			if(zbin>=0 and zbin<=4) xResidualByXYZ[zbin]->Fill(position.x,position.y, residual.x);
 			xResidualByXZ->Fill(position.x,position.z,residual.x);
 			zResidualByXZ->Fill(position.x,position.z,residual.z);
@@ -148,7 +149,8 @@ struct ChipHistogrammer {
 	std::unique_ptr<TProfile2D> xResidualByPixel, zResidualByPixel;
 
 	void fillHit(const PositionHit& h);
-	void fillRotation(const PositionHit& h, const TVector3& COM);
+	void fillRotation(const TVector3& pos, const TVector3& residual, const TVector3& COM);
+	void fillRotation(const PositionHit& h, const TVector3& COM) { fillRotation(h.position, h.residual, COM); }
 	void fillEvent();
 	void fillTimewalk(double localZResidual, double ToT, const TimeWalkCorrector& twc) {
 		zResidualByToT->Fill(ToT*25E-3, localZResidual+twc.getCorrection(ToT));
@@ -175,7 +177,7 @@ ChipHistogrammer::ChipHistogrammer(std::string name, const Alignment& align) : d
 
 	xRotation=unique_ptr<TH1D>(new TH1D{"xRotation", "x-rotation;x-rotation [rad.]; Hits", 100,-0.5,0.5});
 	yRotation=unique_ptr<TH1D>(new TH1D{"yRotation", "y-rotation;y-rotation [rad.]; Hits", 100,-0.5,0.5});
-	zRotation=unique_ptr<TH1D>(new TH1D{"zRotation", "z-rotation;z-rotation [rad.]; Hits", 100,-0.05,0.05});
+	zRotation=unique_ptr<TH1D>(new TH1D{"zRotation", "z-rotation;z-rotation [rad.]; Hits", 100,-0.5,0.5});
 
 
 	zResidualByToT=std::unique_ptr<TH2D>(new TH2D{"zResidualByToT", "z-residual by ToT;ToT [#mus]; z-residual [mm]", 100,0,2.5, 200,-5,5});
@@ -217,7 +219,8 @@ void ChipHistogrammer::residualHistograms::createHistograms(const PositionRange&
 	zResidualByz=std::unique_ptr<TH2D>(new TH2D{("zResidualByz"), "z-residuals as a function of drift distance;Drift distance [mm];z-residual [mm]", nBinsZ,-1,14,nBins,-2,2});
 	zResidualByzByToT=std::unique_ptr<TH3D>(new TH3D{("zResidualByzByToT"), "z-residuals as a function of drift distance;Drift distance [mm];z-residual [mm];ToT [#mus]", nBinsZ,-1,14,nBins,-2,2,100,0,2.5});
 
-	zHit = unique_ptr<TH1D>(new TH1D{ ("zHit"), "z-position of hits;z [mm]; Hits", 200,-10,40 });
+	double zmin=-5, zmax=15;
+	zHit = unique_ptr<TH1D>(new TH1D{ ("zHit"), "z-position of hits;z [mm]; Hits", 200,zmin,zmax });
 	double xmax=range.xmax, xmin=range.xmin, ymin=range.ymin, ymax=range.ymax;
 	positionHitMap=unique_ptr<TH2D>(new TH2D{ ("positionHitMap"), "Hitmap with positions;x-position [mm];y-position [mm]",
 		int((xmax-xmin)/.055),xmin,xmax,int((ymax-ymin)/.055),ymin, ymax});
@@ -231,15 +234,15 @@ void ChipHistogrammer::residualHistograms::createHistograms(const PositionRange&
 	}
 
 	for(int i=0; i<5; i++) {
-		xResidualByXYZ.emplace_back( new TProfile2D{ ("xResidualByXYZ"+to_string(i)).c_str(), "mean x-residual by XYZ;x [mm]; y[mm];z [mm]; mean x-residual [mm]",
+		xResidualByXYZ.emplace_back( new TProfile2D{ ("xResidualByXYZ"+to_string(i)).c_str(),
+			("From z "+std::to_string(i*2-1)+" to "+std::to_string((i+1)*2-1)+";x [mm]; y[mm];z [mm]; mean x-residual [mm]").c_str(),
 			int((xmax-xmin)/.055),xmin,xmax,int((ymax-ymin)/.055),ymin, ymax} );
 	}
 
-	double zmin=-10, zmax=40;
 	xResidualByXZ=std::unique_ptr<TProfile2D>(new TProfile2D{ ("xResidualByXZ"), "mean x-residual by XZ;x [mm]; y[mm]; mean x-residual [mm]",
-		int((xmax-xmin)/.055),xmin,xmax,200,zmin, zmax});
+		int((xmax-xmin)/.055),xmin,xmax,100,zmin, zmax});
 	zResidualByXZ=std::unique_ptr<TProfile2D>(new TProfile2D{ ("zResidualByXZ"), "mean z-residual by XZ;x [mm]; y[mm]; mean z-residual [mm]",
-		int((xmax-xmin)/.055),xmin,xmax,200,zmin, zmax});
+		int((xmax-xmin)/.055),xmin,xmax,100,zmin, zmax});
 	for(auto prof2d : {&xResidualByXZ, &zResidualByXZ} ) {
 		(*prof2d)->SetMinimum(-0.2), (*prof2d)->SetMaximum(0.2);
 	}
@@ -261,25 +264,27 @@ void ChipHistogrammer::fillHit(const PositionHit& h) {
 	hitsCounter++;
 }
 
-void ChipHistogrammer::fillRotation(const PositionHit& h, const TVector3& COM) { //h in timepix coordinates, COM
+void ChipHistogrammer::fillRotation(const TVector3& position, const TVector3& residual, const TVector3& COM) { //h in timepix coordinates, COM
 	//todo: do proper 3d rotation alignment
-	auto d=h.position-COM;
+	auto d=position-COM;
 	//x
 	double perp2x=d.Perp2({1,0,0});
-	double phix=(d.z()*h.residual.y-d.y()*h.residual.z)/perp2x;
+	double phix=(d.z()*residual.y()-d.y()*residual.z())/perp2x;
 	xRotation->Fill(phix, perp2x);
 
 	//y
 	double perp2y=d.Perp2({0,1,0});
-	double phiy=(d.x()*h.residual.z-d.z()*h.residual.x)/perp2y;
+	double phiy=(d.x()*residual.z()-d.z()*residual.x())/perp2y;
 	yRotation->Fill(phiy, perp2y);
 	//for the moment, until error are included, use only x residuals in y rotation!
 //	double phiy=-h.residual.x/d.z();
 //	yRotation->Fill(phiy,d.z()*d.z());
 
 	//z
-	double phi=(d.y()*h.residual.x-d.x()*h.residual.y)/d.Perp2();
-	double weight=d.Perp2();
+//	double phi=(d.y()*h.residual.x-d.x()*h.residual.y)/d.Perp2();
+//	double weight=d.Perp2();
+	double phi=residual.x()/d.y();
+	double weight=d.y()*d.y();
 	zRotation->Fill(phi,weight);
 }
 void ChipHistogrammer::fillEvent() {
@@ -303,6 +308,19 @@ std::vector<PositionHit> QuadTrackFitter::getSpaceHits(const Alignment& alignmen
 	for (auto& h : posHits) {
 		//apply alignment
 		h = alignment.totCorrections[h.chip].correct(h);
+		//do bin correction for columns 192, 193 (new quad)
+		if(h.column==192 or h.column==193) {
+			const double toaCorrection=25*alignment.driftSpeed.value;
+			h.position.z-=toaCorrection;
+			h.driftTime-=toaCorrection/alignment.driftSpeed.value;
+		}
+		//do odd/even bin column correction
+		const double oddEvenCorrection=0.02;
+		if(h.column%2) {//odd
+			h.position.z-=oddEvenCorrection;
+		} else { //even
+			h.position.z+=oddEvenCorrection;
+		}
 		h = alignment.timeWalks[h.chip].correct(h);
 		h = alignment.transform(h);
 		//			if(h.position.z<alignment.hitErrors.z0) h.flag=PositionHit::Flag::smallz;
@@ -382,9 +400,9 @@ void QuadTrackFitter::Loop(std::string outputFile,const Alignment& alignment) {
 			if(h.flag!=PositionHit::Flag::valid) continue;
 
 			hists[h.chip].fillHit(h);
-			hists[h.chip].fillRotation(h, alignment.chips[h.chip].getCOMGlobal() );
+			hists[h.chip].fillRotation(h, alignment.chips[h.chip].getShiftedCOM() );
 			quad.fillHit(h);
-			quad.fillRotation(h, alignment.quad.getCOMGlobal());
+			quad.fillRotation(h, alignment.quad.getShiftedCOM());
 			auto localPosition=alignment.chips[h.chip].rotateAndShiftBack(h.position);
 			auto localResidual=alignment.chips[h.chip].rotateBack(h.residual, {0,0,0} );
 			hists[h.chip].local.fill( localPosition, localResidual, h.ToT );

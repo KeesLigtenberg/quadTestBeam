@@ -45,15 +45,16 @@
 static auto correction=new TF1("correction",
 		"breitwigner(0)+breitwigner(3)+breitwigner(6)+breitwigner(9)+[offset]");
 
-double deformationCorrection(int ichip, double x) {
+const std::vector<std::vector<double>> deformationCorrectionParameters{
+	{2.61443, 0.100941, 1.61043, -1.52508, 0.926549, 1.86461, 1.36493, 13.126, 1.96334, -3.15446, 14.3033, 1.87523, -0.000113656},
+	{2.2285, -0.0143355, 1.65785, -1.16026, 0.995182, 1.79715, 2.64069, 13.2987, 2.55817, -6.25284, 14.6259, 2.36398, 0.000223841},
+	{4.19523, 14.0504, 2.02393, -2.35141, 14.9244, 2.3167, 1.72633, 27.3346, 1.94821, -3.01411, 28.2367, 1.71122, 0.00287906},
+	{6.24837, 13.7489, 2.48634, -2.89738, 15.1342, 2.68989, 1.65655, 27.4766, 2.02193, -3.22435, 28.5387, 1.84855, 0.00445736}};
+
+
+double deformationCorrection(int ichip, double x, const std::vector<std::vector<double>>& p=deformationCorrectionParameters) {
 	static auto correction=new TF1("correction",
 			"breitwigner(0)+breitwigner(3)+breitwigner(6)+breitwigner(9)+[offset]");
-
-	const std::vector<std::vector<double>> p{
-		{7.09713, 0.430926, 1.79566, -6.22156, 0.684718, 1.89835, 1.84525, 13.2064, 2.07817, -4.34259, 14.382, 2.12304, 0.0103622},
-		{2.48729, -0.229976, 1.33571, -0.911999, 1.19903, 1.69983, 9.1324, 13.5909, 2.26925, -11.5126, 13.9285, 2.25019, 0.00336787},
-		{13.7212, 13.5094, 3.8325, -7.44684, 14.82, 3.62685, 5.96425, 27.6485, 2.07897, -7.02432, 27.9569, 1.94964, -0.033238},
-		{13.7446, 13.8724, 2.85009, -10.3855, 14.4876, 3.33408, 3.03169, 27.4861, 2.27521, -5.85349, 28.5317, 2.54876, 0.0326382}};
 
 	for(std::size_t i=0;i<p[ichip].size();i++) correction->SetParameter(i,p[ichip][i]);
 

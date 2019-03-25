@@ -192,6 +192,7 @@ void Alignment::resetQuadOrigin() {
 
 }
 
+//quad coordinates, returns 0 if no chip was found!
 inline int Alignment::getChipNumber(const TVector3& pos) const {
 	for(unsigned i=0; i<chips.size(); i++) {
 		if(chips[i].isOnChip(pos)) return i+1;

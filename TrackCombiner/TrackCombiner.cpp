@@ -68,6 +68,7 @@ void TrackCombiner::openFile(std::string outputFileName) {
 		outputTree=std::unique_ptr<TTree>(new TTree("fitResults", "fitResults"));
 
 		outputTree->Branch("telescopeFits", "std::vector<FitResult3D>", &currentEntry.telescopeFits);
+		outputTree->Branch("timepixFits", "std::vector<FitResult3D>", &currentEntry.timepixFits);
 		outputTree->Branch("meanQuadPosition", "Vec3", &currentEntry.meanQuadPosition);
 		outputTree->Branch("nHitsPerChip", "std::vector<int>", &currentEntry.nHitsPerChip);
 		outputTree->Branch("quadHits", "std::vector<PositionHit>", &currentEntry.quadHits);
@@ -103,7 +104,7 @@ void TrackCombiner::Process() {
 
 
 	for(int telescopeEntryNumber=0,tpcEntryNumber=0; //5000000, 2308829
-			telescopeEntryNumber<1E6 //telescopeFitter.nEvents//1000000
+			telescopeEntryNumber<telescopeFitter.nEvents//1000000
 			;) {
 //		triggerStatusHistogram.reset();
 
@@ -168,6 +169,7 @@ void TrackCombiner::Process() {
 					h=calculateResidualTimepix(h,f);
 					h=flagResidual(h,{1.5,1.5,2});
 				}
+
 
 				int nHitsAfterSimpleCut=countTotalValidHits(quadHitsWithResidual);
 				if(nHitsAfterSimpleCut<20) {
@@ -242,6 +244,8 @@ void TrackCombiner::Process() {
 
 				matched = true;
 				fittedTrack=&f;
+//				fittedTrack=&timepixFit;
+//				quadHitsWithResidual=calculateResidualTimepix(quadHitsWithResidual,timepixFit); //recalculate residuals
 				quadHits=quadHitsWithResidual;
 				break;
 
@@ -262,14 +266,18 @@ void TrackCombiner::Process() {
  			for(auto& h : quadHits) {
  				if(h.flag!=PositionHit::Flag::valid) continue;
  				hists[h.chip]->fillHit(h);
- 				hists[h.chip]->fillRotation(h, alignment.chips[h.chip].getCOMGlobal());
  				quadHist->fillHit(h);
- 				quadHist->fillRotation(h, alignment.quad.getCOMGlobal());
+ 				quadHist->fillRotation(h, alignment.quad.getShiftedCOM());
 
  				auto localPosition=alignment.quad.rotateAndShiftBack(h.position);
  				auto expectedPosition = Vec3{ fittedTrack->xAt(h.position.y), h.position.y, fittedTrack->yAt(h.position.y)}; //telescope->timepix frame!
  				auto localExpectedPosition=alignment.quad.rotateAndShiftBack(expectedPosition);
  				auto localResidual=alignment.quad.rotateBack(h.residual, {0,0,0});
+
+ 				auto chipFrameCOM=alignment.chips[h.chip].COM;
+ 				auto chipFrameResidual=alignment.chips[h.chip].rotateBack(localResidual, {0,0,0});
+ 				auto chipFrameExpectedPosition=alignment.chips[h.chip].rotateAndShiftBack(localExpectedPosition);
+ 				hists[h.chip]->fillRotation(chipFrameExpectedPosition, chipFrameResidual, chipFrameCOM );
 
  				hists[h.chip]->fillTimewalk(localResidual.z, h.ToT, alignment.timeWalks[h.chip]);
  				quadHist->fillTimewalk(localResidual.z, h.ToT, alignment.timeWalks[h.chip]);
@@ -336,7 +344,9 @@ void TrackCombiner::Process() {
 
 		if(outputTree) {
 			currentEntry.telescopeFits=telescopeFits;
-			currentEntry.meanQuadPosition=getAveragePosition(quadHits, {PositionHit::Flag::shiftedTrigger});
+			currentEntry.timepixFits=timepixFits;
+//			currentEntry.meanQuadPosition=getAveragePosition(quadHits, {PositionHit::Flag::shiftedTrigger});
+			currentEntry.meanQuadPosition=getAveragePosition(quadHits, true); //reject all flagged
 			currentEntry.nHitsPerChip=nHitsPerChip;
 			currentEntry.quadHits=quadHits;
 			currentEntry.matched=matched;
