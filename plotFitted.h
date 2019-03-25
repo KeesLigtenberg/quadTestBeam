@@ -370,6 +370,7 @@ TH1* fitDiffusionSlices(TH2* h2, std::string x="z") {
 
 TF1* fitDiffusion( TH2* h2 , std::string x="x", double z0=-1, std::string canvname="canv") {
 	double zmax=11;
+	std::string LorT=x=="x" ? "T" : x=="z" ? "L" : x;
 
 	TF1* drift=new TF1("drift", ("sqrt( pow([#sigma_{"+x+"0}],2) + pow([D_{"+x+"}],2)/10*(x-[z0]) )").c_str(), z0, zmax);
 	new TCanvas((canvname+"_"+x).c_str(), (canvname+"_"+x).c_str(), 800,600);
@@ -414,11 +415,11 @@ TF1* fitDiffusion( TH2* h2 , std::string x="x", double z0=-1, std::string canvna
 
 	//nicer stat pane
 	gStyle->SetOptFit(false);
-	auto stats=new StatsWrapper();
-	stats->add("D_{"+x+"}",  drift->GetParameter(1)*1E3, 0, "#mum/#sqrt{cm}" );
+	auto stats=new StatsWrapper(0.5,0.4,0.88,0.18);
+	stats->add("D_{"+LorT+"}",  drift->GetParameter(1)*1E3, 0, "#mum/#sqrt{cm}" );
 	if(x!="x") stats->add("#sigma_{"+x+"0}" ,  drift->GetParameter(0)*1E3, 0, "#mum" );
 	stats->add("z0" ,  drift->GetParameter(2), 2, "mm" );
-	stats->addChiSquare(*drift);
+	//stats->addChiSquare(*drift);
 	stats->draw();
 	
 	//plot residuals
@@ -496,7 +497,7 @@ void plotSlicedDiffusionWithFit( std::string filename="combinedFit.root", double
 	std::vector<std::string> slicename = {"0.15 #mus < ToT < 0.40 #mus", "ToT > 0.40 #mus"};
 	std::vector<std::pair<double,double> > binRanges = { {7,17}, {18, zaxis->GetNbins()+1} }; //0.025 per bin!
 	std::vector<TH1*> histograms= { nullptr, nullptr };
-	auto stats=new StatsWrapper();
+	auto stats=new StatsWrapper(0.5,0.4,0.88,0.18);
 	TF1* drift=new TF1("drift", "sqrt( pow([#sigma_{z0}],2) + pow([D],2)/10*(x-[z0]) )", 4.5, 23);;
 	TLegend* legend = new TLegend();
 	for(int i : {0,1} ) {
@@ -761,7 +762,7 @@ void combineDeformationFrequencies(
 		auto prof=getCombinedDeformations(histName, fileNames);
 		//rebin
 		prof->Rebin2D(4,4);
-		removeBinsWithFewerEntries(prof, 2000);
+		removeBinsWithFewerEntries(prof, 1000);
 		auto hist=getFrequencyHistogramFromProfile(prof);
 		combined.add(hist, *histTitle++ + "( RMS = "+to_string( int( hist->GetRMS()*1000) )+" #mum)");
 
