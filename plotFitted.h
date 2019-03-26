@@ -733,7 +733,7 @@ void combineDeformations(std::string histName="quad/xResidualByPosition_locExp",
 
 	//rebin
 	prof->Rebin2D(4,4);
-	removeBinsWithFewerEntries(prof, 800);
+	removeBinsWithFewerEntries(prof, 1000);
 
 	prof->SetTitle("");
 	prof->GetYaxis()->SetTitleOffset(1.3);
