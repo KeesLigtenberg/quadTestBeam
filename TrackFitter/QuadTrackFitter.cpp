@@ -167,7 +167,7 @@ ChipHistogrammer::ChipHistogrammer(std::string name, const Alignment& align) : d
 	auto startDir=gDirectory;
 	gDirectory->mkdir( dirName.c_str() )->cd();
 
-	nHits=		unique_ptr<TH1I>(new TH1I{"nHits", "Number of hits per event;Number of hits;Entries", 100,0,200});
+	nHits=		unique_ptr<TH1I>(new TH1I{"nHits", "Number of hits per event;Number of hits;Entries", 200,0,400});
 	constexpr double ToABinWidth=1.5625E-3;
 	driftTime=unique_ptr<TH1D>(new TH1D{"driftTime","Drift time;Drift time [#mus];Hits", int(0.8/ToABinWidth),-0.39999,0.4}); //zero would be rounded up (wrong), so move bin slightly to 0.099999
 	ToT=			unique_ptr<TH1D>(new TH1D{"ToT", "Time over threshold;ToT [#mus];Hits",80,0,2});

@@ -63,14 +63,18 @@ TrackCombiner::~TrackCombiner() {
 void TrackCombiner::openFile(std::string outputFileName) {
 	outputFile=std::unique_ptr<TFile>(new TFile(outputFileName.c_str(), "RECREATE"));
 
-	const bool makeOutputTree=false;
+	const bool makeOutputTree=true;
 	if(makeOutputTree) {
 		outputTree=std::unique_ptr<TTree>(new TTree("fitResults", "fitResults"));
 
 		outputTree->Branch("telescopeFits", "std::vector<FitResult3D>", &currentEntry.telescopeFits);
 		outputTree->Branch("timepixFits", "std::vector<FitResult3D>", &currentEntry.timepixFits);
 		outputTree->Branch("meanQuadPosition", "Vec3", &currentEntry.meanQuadPosition);
+		outputTree->Branch("meanPositionPerChip", "Vec3", &currentEntry.meanPositionPerChip);
+		outputTree->Branch("meanQuadDiff", "std::vector<Vec3>", &currentEntry.meanQuadDiff);
+		outputTree->Branch("meanDiffPerChip", "std::vector<Vec3>", &currentEntry.meanDiffPerChip);
 		outputTree->Branch("nHitsPerChip", "std::vector<int>", &currentEntry.nHitsPerChip);
+		outputTree->Branch("nHitsPerChipValid", "std::vector<int>", &currentEntry.nHitsPerChipValid);
 		outputTree->Branch("quadHits", "std::vector<PositionHit>", &currentEntry.quadHits);
 		outputTree->Branch("matched", &currentEntry.matched);
 
@@ -91,7 +95,9 @@ void TrackCombiner::openFile(std::string outputFileName) {
 	smallestShift=std::unique_ptr<TH1D>( new TH1D("smallestShift", "Smallest shift of all hits in track;Shift [409.6 #mus];",100,0,100) );
 	averageShift=std::unique_ptr<TH1D>( new TH1D("averageShift", "Average shift of all hits in track; Shift [409.6 #mus];", 100,0,100 ) );
 	top->cd();
-
+	top->mkdir("eventhist")->cd();
+	averageToTrackx=std::unique_ptr<TH1D>( new TH1D("averageToTrackx", "distance from average of selected hits to track;Distance [mm];Entries", 100,-1,1) );
+	top->cd();
 }
 
 
@@ -104,7 +110,7 @@ void TrackCombiner::Process() {
 
 
 	for(int telescopeEntryNumber=0,tpcEntryNumber=0; //5000000, 2308829
-			telescopeEntryNumber<telescopeFitter.nEvents//1000000
+			telescopeEntryNumber<1E5 //telescopeFitter.nEvents//1000000
 			;) {
 //		triggerStatusHistogram.reset();
 
@@ -151,7 +157,7 @@ void TrackCombiner::Process() {
  		for(auto&f : telescopeFits) {
 
  			//fiducial region
- 			const bool useFiducialExpected=false;
+ 			const bool useFiducialExpected=true;
  			if(useFiducialExpected) {
 				Vec3 expectedAtQuad{ f.xAt(193), 193, f.yAt(193) };
 				auto localExpectedAtQuad=alignment.quad.rotateAndShiftBack(expectedAtQuad);
@@ -243,9 +249,13 @@ void TrackCombiner::Process() {
 
 
 				matched = true;
-				fittedTrack=&f;
-//				fittedTrack=&timepixFit;
-//				quadHitsWithResidual=calculateResidualTimepix(quadHitsWithResidual,timepixFit); //recalculate residuals
+				const bool useTimepixFit=false;
+				if(useTimepixFit) {
+					fittedTrack=&timepixFit;
+					quadHitsWithResidual=calculateResidualTimepix(quadHitsWithResidual,timepixFit); //recalculate residuals
+				} else {
+					fittedTrack=&f;
+				}
 				quadHits=quadHitsWithResidual;
 				break;
 
@@ -296,6 +306,9 @@ void TrackCombiner::Process() {
  				hists[h.chip]->corrected.fill( localExpectedPosition, correctedResidual, h.ToT );
  				quadHist->corrected.fill(localExpectedPosition, correctedResidual, h.ToT);
  			}
+
+			auto averagePos=getAveragePosition(quadHits, true);
+			averageToTrackx->Fill( averagePos.x()-fittedTrack->xAt(averagePos.y()) );
  		}
 
 
@@ -304,7 +317,7 @@ void TrackCombiner::Process() {
 		}
 		quadHist->fillEvent();
 
-		if(drawEvent) {
+		if(drawEvent && matched) {
 			//		SimpleDetectorConfiguration setupForDrawing { 0,30 /*x*/, 0,42 /*y beam*/, -20,20/*z drift*/};
 			auto setupForDrawing=simpleDetectorFromChipCorners(alignment.getAllChipCorners());
 			setupForDrawing.minz=-10, setupForDrawing.maxz=30;
@@ -347,8 +360,17 @@ void TrackCombiner::Process() {
 			currentEntry.timepixFits=timepixFits;
 //			currentEntry.meanQuadPosition=getAveragePosition(quadHits, {PositionHit::Flag::shiftedTrigger});
 			currentEntry.meanQuadPosition=getAveragePosition(quadHits, true); //reject all flagged
+			currentEntry.meanPositionPerChip=getAveragePositionPerChip(quadHits);
+			currentEntry.meanQuadDiff.x=matched ? (currentEntry.meanQuadPosition.x - fittedTrack->xAt(currentEntry.meanQuadPosition.y)) : 0;
+			currentEntry.meanQuadDiff.z=matched ? (currentEntry.meanQuadPosition.z - fittedTrack->yAt(currentEntry.meanQuadPosition.y)) : 0;
+			currentEntry.meanDiffPerChip=std::vector<Vec3>(4);
+			for(int i=0; i<4; i++) {
+				currentEntry.meanDiffPerChip[i].x =	matched ? (currentEntry.meanPositionPerChip[i].x - fittedTrack->xAt(currentEntry.meanPositionPerChip[i].y) ) : 0;
+				currentEntry.meanDiffPerChip[i].z =	matched ? (currentEntry.meanPositionPerChip[i].z - fittedTrack->yAt(currentEntry.meanPositionPerChip[i].y) ) : 0;
+			}
 			currentEntry.nHitsPerChip=nHitsPerChip;
-			currentEntry.quadHits=quadHits;
+			currentEntry.nHitsPerChipValid=countHitsPerChip(quadHits,true);
+			//currentEntry.quadHits=quadHits;
 			currentEntry.matched=matched;
 
 			currentEntry.telescopeTime=telescopeFitter.timestamp;

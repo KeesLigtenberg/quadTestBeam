@@ -398,7 +398,7 @@ TH1* fitDiffusionSlices(TH2* h2, std::string x="z") {
 	gausBG->SetParameters(100,0,0.25,0); // Constant, Mean, Sigma, bg
 	gausBG->SetParLimits(2, 1E-3,10);
 
-	h2->FitSlicesY(x=="z" ? gausRange : gausRange, 0/*firstbin*/, -1/*lastbin*/, 10/*min number of entries*/, "QNR");
+	h2->FitSlicesY(x=="z" ? gausRange : gausBG, 0/*firstbin*/, -1/*lastbin*/, 10/*min number of entries*/, "QNR");
 //	h2->FitSlicesY(gaus, 0, -1, 50, "QNR");
 
 	return dynamic_cast<TH1*>(gDirectory->Get( (h2->GetName()+std::string("_2")).c_str() ));

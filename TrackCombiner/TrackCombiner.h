@@ -35,13 +35,16 @@ private:
 	std::array< std::unique_ptr<ChipHistogrammer>, nChips> hists{{}};
 	std::unique_ptr<ChipHistogrammer> quadHist{nullptr};
 	std::unique_ptr<TH1D> selectedHitAverageToTrackx, fractionInTrack, smallestShift, averageShift;
+	std::unique_ptr<TH1D> averageToTrackx;
 
 
 	struct TreeEntry {
 		std::vector<FitResult3D> telescopeFits;
 		std::vector<FitResult3D> timepixFits;
-		Vec3 meanQuadPosition;
+		Vec3 meanQuadPosition, meanQuadDiff;
+		std::vector<Vec3> meanPositionPerChip, meanDiffPerChip;
 		std::vector<int> nHitsPerChip;
+		std::vector<int> nHitsPerChipValid;
 		std::vector<PositionHit> quadHits;
 		bool matched;
 		long long triggerToA;

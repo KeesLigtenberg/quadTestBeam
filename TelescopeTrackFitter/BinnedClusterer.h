@@ -65,7 +65,7 @@ struct BinnedClusterer {
 				DrawHistogram ?
 				new TH2D("graphicHistogram", "Histogram of hough transform;x bin;y bin", xbins,0,xbins, ybins,0,ybins):
 				nullptr };
-		static TCanvas* canv=new TCanvas("houghTelCanv", "Canvas with cluster histogram", 600,400);
+		static TCanvas* canv=DrawHistogram ? new TCanvas("houghTelCanv", "Canvas with cluster histogram", 600,400) : nullptr;
 
 		for( unsigned plane=0; plane<hv.size(); plane++ ) {
 			for(auto& h : hv[plane] ) {

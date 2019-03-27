@@ -27,6 +27,7 @@ struct Vec3 {//because TVector3 has a bug in combination with TTreeReader
 #pragma link C++ class Hit+;
 #pragma link C++ class Vec3+;
 #pragma link C++ class std::vector<Hit>+;
+#pragma link C++ class std::vector<Vec3>+;
 #pragma link C++ class std::vector<std::vector<Hit>>+;
 
 #endif

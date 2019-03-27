@@ -92,33 +92,42 @@ PositionHit& flagShiftedTrigger(PositionHit& h, int maxShift=0) {
 	return h;
 }
 
-
 template<class Container>
-TVector3 getAveragePosition(Container hv, bool rejectFlagged=false) {
+TVector3 getAveragePositionCondition(Container hv, std::function<bool(const PositionHit&)> isValid) {
 	TVector3 sum(0,0,0);
 	int n=0;
 	for(const PositionHit& hit : hv) {
-		if(rejectFlagged && hit.flag!=PositionHit::Flag::valid) continue;
+		if(not isValid(hit)) continue;
 		sum+=hit.position;
 		n++;
 	}
 	sum*=(1./n);
 	return sum;
+}
+
+
+template<class Container>
+TVector3 getAveragePosition(Container hv, bool rejectFlagged=false) {
+	if(rejectFlagged) {
+		return getAveragePositionCondition(hv, [](const PositionHit& h){return h.flag==PositionHit::Flag::valid;} );
+	} else {
+		return getAveragePositionCondition(hv, [](const PositionHit& h){return true;});
+	}
 }
 
 template<class Container>
 TVector3 getAveragePosition(Container hv, std::set<PositionHit::Flag> rejectFlags) {
-	TVector3 sum(0,0,0);
-	int n=0;
-	for(const PositionHit& hit : hv) {
-		if( rejectFlags.find(hit.flag)!=rejectFlags.end() ) continue;
-		sum+=hit.position;
-		n++;
-	}
-	sum*=(1./n);
-	return sum;
+	return getAveragePositionCondition(hv, [&rejectFlags](const PositionHit& h){return rejectFlags.find(h.flag)==rejectFlags.end();});
 }
 
+template<class Container>
+std::vector<Vec3> getAveragePositionPerChip(Container hv) {
+	std::vector<Vec3> averages;
+	for(int i=0; i<4; i++) {
+		averages.push_back( getAveragePositionCondition(hv, [i](const PositionHit& h){ return h.isValid() && h.chip == i; } ) );
+	}
+	return averages;
+}
 
 std::vector<int> countHitsPerChip(const std::vector<PositionHit>& hits, bool rejectFlagged=false) {
 	std::vector<int> nHits(4);
