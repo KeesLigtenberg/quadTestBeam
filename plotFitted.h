@@ -14,6 +14,7 @@
 #include "/user/cligtenb/rootmacros/AllCombiner.h"
 #include "/user/cligtenb/rootmacros/histogramOperations.h"
 #include "/user/cligtenb/rootmacros/StatsWrapper.h"
+#include "/user/cligtenb/rootmacros/CombineHistogramsFromTree.h"
 
 //#include "../rootmacros/getObjectFromFile.h"
 //#include "../rootmacros/getHistFromTree.h"
@@ -318,11 +319,12 @@ TH1* plotFittedTimeWalk(TH2* uncorrected) {
 
 	double minToT=0.10;
 	auto simple=new TF1("2 parameters", "[c_{1}]/(x+[t_{0}])+[offset]", minToT,2.5);
+	simple->SetLineWidth(1);
 	
 	simple->SetParameters(0.366,0.066,0);
 	means->Fit(simple, "", "", minToT,2.5);
 	double offset=simple->GetParameter("offset");
-//	means=shiftY(means, -simple->GetParameter("offset") );
+	means=shiftY(means, -simple->GetParameter("offset") );
 
 	means->Draw();	
 	simple->SetParameters(0.366,0.066,0);
@@ -333,7 +335,7 @@ TH1* plotFittedTimeWalk(TH2* uncorrected) {
 	means->GetYaxis()->SetTitleOffset(1.3);
 	means->GetYaxis()->SetTitleSize(0.05);
 	means->GetYaxis()->SetLabelSize(0.05);
-	means->GetYaxis()->SetRangeUser(-1,4);
+	means->GetYaxis()->SetRangeUser(0,3.5);
 	means->GetXaxis()->SetTitleOffset(1.3);
 	means->GetXaxis()->SetTitleSize(0.05);
 	means->GetXaxis()->SetLabelSize(0.05);
@@ -348,7 +350,7 @@ TH1* plotFittedTimeWalk(TH2* uncorrected) {
 	auto stats=new StatsWrapper(0.5,0.6,0.88,0.88);
 	stats->add("c_{1}", simple->GetParameter("c_{1}"), 3, "mm #mus");
 	stats->add("t_{0}", simple->GetParameter("t_{0}"), 4, "#mus");
-	stats->add("z_{offset}", offset, 3, "mm");
+//	stats->add("z_{offset}", offset, 3, "mm");
 	//stats->addChiSquare(*simple);
 	stats->draw();
 	return means;
@@ -395,21 +397,27 @@ TH1* fitDiffusionSlices(TH2* h2, std::string x="z") {
 //	TF1* exGaus=new TF1("exGaus", "[c]*[l]/2*exp([l]/2*(2*[m]+[l]*[s]*[s]-2*x))*TMath::Erfc( ([m]+[l]*[s]*[s]-x)/sqrt(2)/[s] )", -2, 2); //Exponentially modified gaussian distribution (see wiki)
 //	exGaus->SetParameters(2E4,3.1,-0.25,0.2); // Constant, Lambda, Mean, Sigma
 	//exGaus->FixParameter(1,3.1);
-	gausBG->SetParameters(100,0,0.25,0); // Constant, Mean, Sigma, bg
+	gausBG->SetParameters(1E4,0,0.3,0); // Constant, Mean, Sigma, bg
 	gausBG->SetParLimits(2, 1E-3,10);
+	gaus->SetParameters(1E4,0,0.38); // Constant, Mean, Sigma, bg
 
-	h2->FitSlicesY(x=="z" ? gausRange : gausBG, 0/*firstbin*/, -1/*lastbin*/, 10/*min number of entries*/, "QNR");
+	h2->FitSlicesY(x=="z" ? gausRange : gaus, 0/*firstbin*/, -1/*lastbin*/, 15/*min number of entries*/, "QNRM");
 //	h2->FitSlicesY(gaus, 0, -1, 50, "QNR");
+
+	//view background contributions
+//	gDirectory->Get( (h2->GetName()+std::string("_3")).c_str() )->DrawClone();
+//	new TCanvas();
 
 	return dynamic_cast<TH1*>(gDirectory->Get( (h2->GetName()+std::string("_2")).c_str() ));
 }
 
 
 TF1* fitDiffusion( TH2* h2 , std::string x="x", double z0=-1, std::string canvname="canv") {
-	double zmax=11;
+	double zmax=9;
 	std::string LorT=x=="x" ? "T" : x=="z" ? "L" : x;
 
 	TF1* drift=new TF1("drift", ("sqrt( pow([#sigma_{"+x+"0}],2) + pow([D_{"+x+"}],2)/10*(x-[z0]) )").c_str(), z0, zmax);
+	drift->SetLineWidth(1);
 	new TCanvas((canvname+"_"+x).c_str(), (canvname+"_"+x).c_str(), 800,600);
 
 	fitDiffusionSlices(h2,x);
@@ -427,7 +435,7 @@ TF1* fitDiffusion( TH2* h2 , std::string x="x", double z0=-1, std::string canvna
 	h2_2->GetXaxis()->SetTitle("z-position [mm]");
 	h2_2->GetYaxis()->SetTitle( ("#sigma_{"+x+"} from fit to track-residual [mm]").c_str() );
 	increaseAxisSize(h2_2, 0.05);	
-	h2_2->GetYaxis()->SetRangeUser(0, x=="x"?0.5:0.6 );
+	h2_2->GetYaxis()->SetRangeUser(0, x=="x"?0.4:0.5 );
 	h2_2->GetXaxis()->SetRangeUser(z0,zmax);
 	
 	//guess parameters
@@ -437,10 +445,16 @@ TF1* fitDiffusion( TH2* h2 , std::string x="x", double z0=-1, std::string canvna
 	if(x=="x") 	drift->FixParameter(0, 0.0158771);
 	else drift->SetParameter(0, 0.15);//sigma0
 
+
+//	if(x=="x") {
+//		for(int i=11; i<=16; i++) {
+//			h2_2->SetBinError(i, 0.01);
+//		}
+//	}
+
 	//add error to fit
 //	h2_2=addErrorToHist(h2_2, 1E-3); //set all error bins equal
-//	h2_2->Fit(drift, "", "", z0, zmax);
-	h2_2->Fit(drift, "", "", z0, zmax); //tmp until wiggle at low z is fixed!
+	h2_2->Fit(drift, "", "", z0, zmax);
 
 	gStyle->SetOptTitle(0);	
 	gStyle->SetOptStat(0);
@@ -472,6 +486,7 @@ TF1* fitDiffusion( TH2* h2 , std::string x="x", double z0=-1, std::string canvna
 	return drift;
 
 }
+
 
 void plotDiffusionFromHist(std::string filename="combinedFit.root", std::string histogramName="locExp/xResidualByz", std::string dir="x") {
 	auto hists=chipDirectories;
@@ -547,17 +562,18 @@ TH1* plotSpot(std::string filename="fitted.root") {
 }
 
 
-void plotSlicedDiffusionWithFit( std::string filename="combinedFit.root", double z0=-0.73, std::string object="quad/locExp/zResidualByzByToT" ) {
+void plotSlicedDiffusionWithFit( std::string filename="combinedFit.root", double z0=-0.77, std::string object="quad/locExp/zResidualByzByToT" ) {
 	auto hist3=getObjectFromFile<TH3D>(object, filename);
 	auto zaxis=hist3->GetZaxis();
 
 
 	//HistogramCombiner slices("slices");
-	std::vector<std::string> slicename = {"0.15 #mus < ToT < 0.40 #mus", "ToT > 0.40 #mus"};
-	std::vector<std::pair<double,double> > binRanges = { {7,17}, {18, zaxis->GetNbins()+1} }; //0.025 per bin!
+	std::vector<std::string> slicename = {"0.15 #mus < ToT < 0.50 #mus", "ToT > 0.50 #mus"};
+	std::vector<std::pair<double,double> > binRanges = { {7,21}, {22, zaxis->GetNbins()+1} }; //0.025 per bin!
 	std::vector<TH1*> histograms= { nullptr, nullptr };
 	auto stats=new StatsWrapper();
-	TF1* drift=new TF1("drift", "sqrt( pow([#sigma_{z0}],2) + pow([D],2)/10*(x-[z0]) )", 4.5, 23);;
+	TF1* drift=new TF1("drift", "sqrt( pow([#sigma_{z0}],2) + pow([D],2)/10*(x-[z0]) )", -1, 10);
+	drift->SetLineWidth(1);
 	TLegend* legend = new TLegend();
 	for(int i : {0,1} ) {
 		zaxis->SetRange(binRanges[i].first, binRanges[i].second);
@@ -601,6 +617,7 @@ void plotSlicedDiffusionWithFit( std::string filename="combinedFit.root", double
 	histograms[0]->SetLineColor(kGreen+2);
 	histograms[0]->Draw("same");
 	histograms[1]->Draw("same");
+	drift->Draw("same");
 	legend->Draw();
 
 	//slices.setStyle(10);slices.titleSize=0.05;
@@ -609,6 +626,80 @@ void plotSlicedDiffusionWithFit( std::string filename="combinedFit.root", double
 
 //	stats->draw();
 	//gPad->SetMargin(0.15,0.1,0.15,0.1);
+
+}
+
+void combineFitDiffusion(
+		std::string filename="combinedFit.root",
+		std::vector<std::string> slicename = {"diffusion"},
+		std::vector<std::string> objects = {"quad/locExp/xResidualByz"},
+		double z0=-0.73 ) {
+
+	std::vector<TH1*> histograms{objects.size(), nullptr};
+	auto stats=new StatsWrapper();
+	TF1* drift=new TF1("drift", "sqrt( pow([#sigma_{z0}],2) + pow([D],2)/10*(x-[z0]) )", -1, 10);
+	drift->SetLineWidth(1);
+	TLegend* legend = new TLegend();
+
+	for(	int i=0; i<objects.size(); i++ ) {
+		auto proj=getObjectFromFile<TH2D>(objects.at(i), filename);
+
+
+		auto hsigma=fitDiffusionSlices(proj, "x");
+
+		auto name="slice "+std::to_string(i);
+		histograms.at(i)=(TH1*)hsigma->Clone(name.c_str());
+
+		histograms.at(i)->GetXaxis()->SetTitle("z-position [mm]");
+		histograms.at(i)->GetYaxis()->SetTitle("#sigma_{z} from fit to track-residual [mm]" );
+		//increaseAxisSize(histograms.at(i), 0.05);
+		//histograms.at(i)->GetYaxis()->SetRangeUser(0,0.45);
+		//histograms.at(i)->GetXaxis()->SetRangeUser(z0,23);
+
+		legend->AddEntry(histograms.at(i), (slicename.at(i)).c_str() );
+
+
+
+	}
+
+	if(objects.size()==2) {
+		auto subtracted=makeOperated(histograms[0], histograms[1], [](double a,double b){return 2*b-a;});
+		subtracted->Draw();
+		histograms.push_back(subtracted);
+		legend->AddEntry(subtracted, "Subtracted");
+
+		drift->SetParameter(2,z0);
+		drift->FixParameter(0, 0.0158771);
+		subtracted->Fit(drift, "", "", z0, 9);
+
+		gStyle->SetOptTitle(0);
+		gStyle->SetOptStat(0);
+		gStyle->SetOptFit(1);
+
+		subtracted->Draw();
+		gPad->SetTicks(1,1);
+		gPad->SetMargin(0.15,0.1,0.15,0.1);
+
+		//nicer stat pane
+		gStyle->SetOptFit(false);
+		//cin.get();
+		stats->add( "D_{L}",  drift->GetParameter(1)*1E3, 0, "#mum/#sqrt{cm}" );
+		stats->add( "#sigma_{z0}" ,  drift->GetParameter(0)*1E3, 0, "#mum" );
+		stats->add( "z0" ,  drift->GetParameter(2), 2, "mm" );
+	}
+
+	changeLegendStyle(legend, 1, 0.055);
+	legend->SetX1NDC(0.18);
+
+	//new TCanvas();
+	//drift->Draw();
+//	histograms[0]->SetLineColor(kGreen+2);
+	stats->draw();
+	for(int i=0; i<histograms.size(); i++) {
+		histograms[i]->Draw("same");
+	}
+	drift->Draw("same");
+	legend->Draw();
 
 }
 
@@ -953,7 +1044,7 @@ void combineDeformations(
 
 	//rebin
 	prof->Rebin2D(4,4);
-	removeBinsWithFewerEntries(prof, 1000);
+	removeBinsWithFewerEntries(prof, 800);
 
 	drawDeformationsWithAreas(prof);
 }
@@ -997,17 +1088,18 @@ TProfile2D* correctDeformation(
 
 	//rebin
 	corrected->Rebin2D(4,4);
-	removeBinsWithFewerEntries(corrected, 1000);
+	removeBinsWithFewerEntries(corrected, 800);
 
 	drawDeformationsWithAreas(corrected);
 	return corrected;
 }
 
 void compareDeformationSlices(
-		std::vector<std::string> fileNames={"./run668/combinedFit.root","./run672/combinedFit.root","./run676/combinedFit.root"}
+		std::vector<std::string> fileNames={"./run668/combinedFit.root","./run672/combinedFit.root","./run676/combinedFit.root"},
+		std::string name1="locExp/xResidualByXYZ2", std::string name2="locExp/xResidualByXYZ3"
 ) {
-	auto slice2=correctDeformation(fileNames,"locExp/xResidualByXYZ2");
-	auto slice3=correctDeformation(fileNames,"locExp/xResidualByXYZ3");
+	auto slice2=correctDeformation(fileNames,name1);
+	auto slice3=correctDeformation(fileNames,name2);
 
 //	auto difference=(TProfile2D*) slice2->Clone("difference");
 //	difference->Add(slice3,-1);
@@ -1024,6 +1116,7 @@ void compareDeformationSlices(
 
 	drawDeformationsWithAreas(difference);
 }
+
 
 void plotDeformationPerSlice(std::vector<std::string> fileNames={"./run668/combinedFit.root","./run672/combinedFit.root","./run676/combinedFit.root"}, std::string objectName="quad/locExp/xResidualByXYZ" ) {
 	//auto profile3d=getObjectFromFile<TProfile3D>(objectName, fileName);
@@ -1076,5 +1169,39 @@ void compareChipEdges(std::vector<std::string> alignFiles) {
 	}
 	gStyle->SetOptStat(0);
 }
+
+void drawPartialFitResidual(std::string filename="combinedFit.root") {
+	auto tree = getObjectFromFile<TTree>("fitResults",filename);
+
+	for(std::string x : {"x","z"} ) {
+		combineHistogramsFromTree(*tree, { "meanDiffPerChipPerFitLast[0][1]."+x,	"meanDiffPerChipPerFitFirst[0][1]."+x},
+				"fabs(meanDiffPerChipPerFitLast[0][1]."+x+")>1E-10 && fabs(meanDiffPerChipPerFitFirst[0][1]."+x+")>1E-10 && nHitsPerChipValid[0]>20 && nHitsPerChipValid[1]>20");
+		combineHistogramsFromTree(*tree, { "meanDiffPerChipPerFitLast[1][0]."+x,	"meanDiffPerChipPerFitFirst[1][0]."+x},
+				"fabs(meanDiffPerChipPerFitLast[1][0]."+x+")>1E-10 && fabs(meanDiffPerChipPerFitFirst[1][0]."+x+")>1E-10 && nHitsPerChipValid[0]>20 && nHitsPerChipValid[1]>20");
+
+		combineHistogramsFromTree(*tree, { "meanDiffPerChipPerFitLast[3][2]."+x,	"meanDiffPerChipPerFitFirst[3][2]."+x},
+				"fabs(meanDiffPerChipPerFitLast[3][2]."+x+")>1E-10 && fabs(meanDiffPerChipPerFitFirst[3][2]."+x+")>1E-10 && nHitsPerChipValid[2]>20 && nHitsPerChipValid[3]>20");
+		combineHistogramsFromTree(*tree, { "meanDiffPerChipPerFitLast[2][3]."+x,	"meanDiffPerChipPerFitFirst[2][3]."+x},
+				"fabs(meanDiffPerChipPerFitLast[2][3]."+x+")>1E-10 && fabs(meanDiffPerChipPerFitFirst[2][3]."+x+")>1E-10 && nHitsPerChipValid[2]>20 && nHitsPerChipValid[3]>20");
+	}
+
+}
+
+TProfile2D* drawPixelzCorrectionModulus(std::string filename="combinedFit.root") {
+	auto th2 = getObjectFromFile<TProfile2D>("quad/zResidualByPixel", filename);
+	int xbins=2, ybins=16;
+	auto modulus=new TProfile2D{"modulus", "zResidualByPixel", xbins,0,double(xbins),ybins,0,double(ybins)};
+	makeAppliedByPosition(th2, [&](double c, double x, double y){
+				//std::cout<<x<<", "<<y<<": "<<c<<"\n";
+				int ix(x), iy(y);
+				if(fabs(c)<0.1)
+					modulus->Fill(ix%xbins,iy%ybins,c);
+				return c;
+	});
+	modulus->Draw("colz0");
+	return modulus;
+}
+
+
 
 

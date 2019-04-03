@@ -352,7 +352,7 @@ inline void HoughTransformer::drawCluster(const T& cluster, const DetectorConfig
 		h=iHit;
 //		std::cout<<int(h.ToT)<<"\n";
 //		if(h.flag==PositionHit::Flag::shiftedTrigger) continue;
-		if(h.flag==PositionHit::Flag::valid)
+//		if(h.flag==PositionHit::Flag::valid)
 			pointTree.Fill();
 	}
 	if(not pointTree.GetEntries()) return;

@@ -33,7 +33,7 @@ struct FitResult2D {
 	double error2At(double z) const { return z*z*error[0]+2*z*error[1]+error[2]; }
 	double errorAt(double z) const { return sqrt(error2At(z)); }
 	bool isValid() const { return !(std::isnan(slope) || std::isnan(intercept)); }
-	void draw(double zmin, double zmax) const;
+	void draw(double zmin, double zmax, Color_t color=kOrange+7) const;
 
 	FitResult2D makeShifted(double shift, double shiftz) const {
 		return { slope, intercept+shift-shiftz*slope, error, /*errors do not change*/ interceptz };

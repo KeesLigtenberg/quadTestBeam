@@ -20,7 +20,7 @@ struct Vec3 {//because TVector3 has a bug in combination with TTreeReader
 	Vec3(double x,double y,double z) : x(x), y(y), z(z) {}
 	Vec3(const TVector3& vec) : x(vec.x()), y(vec.y()), z(vec.z()) {}
 	operator TVector3() const {return TVector3(x,y,z);}
-	double operator[] (int i) { return TVector3(*this)[i]; }
+	double operator[] (int i) const { return TVector3(*this)[i]; }
 	double x,y,z;
 };
 
@@ -29,5 +29,6 @@ struct Vec3 {//because TVector3 has a bug in combination with TTreeReader
 #pragma link C++ class std::vector<Hit>+;
 #pragma link C++ class std::vector<Vec3>+;
 #pragma link C++ class std::vector<std::vector<Hit>>+;
+#pragma link C++ class std::vector<std::vector<Vec3>>+;
 
 #endif

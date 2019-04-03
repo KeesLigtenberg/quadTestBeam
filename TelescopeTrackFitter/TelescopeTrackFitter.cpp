@@ -122,6 +122,9 @@ std::vector<std::vector<PositionHit> > TelescopeTrackFitter::getSpaceHits() {
 	//apply translation and rotation
 	spaceHit=rotateAndShift(spaceHit);
 
+	//set errors
+	for(auto& hv: spaceHit) for(auto& h : hv) h.error=TVector3(detector.pixelsize,detector.pixelsize,1);
+
 	return spaceHit;
 }
 

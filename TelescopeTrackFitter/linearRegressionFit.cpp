@@ -17,20 +17,20 @@ void FitResult3D::draw(double zmin, double zmax, Color_t color) const { //in tim
 	double x[npoints] = { XZ.at(zmin), XZ.at(zmax)};
 	double y[npoints] = { YZ.at(zmin), YZ.at(zmax)};
 	double z[npoints] = { zmin, zmax};
-	std::cout<<"Line "<<color<<" :";
-	for(int i=0; i<npoints; i++) std::cout<<" ("<<x[i]<<", "<<y[i]<<", "<<z[i]<<")";
-	std::cout<<"\n";
+//	std::cout<<"Line "<<color<<" :";
+//	for(int i=0; i<npoints; i++) std::cout<<" ("<<x[i]<<", "<<y[i]<<", "<<z[i]<<")";
+//	std::cout<<"\n";
 	TPolyLine3D l( npoints, x, z, y );
 	l.SetLineColor(color);
 	l.SetLineWidth(2);
 	l.DrawClone();
 }
-void FitResult2D::draw(double zmin, double zmax) const { //in timepix frame, with telescope coordinates!
+void FitResult2D::draw(double zmin, double zmax, Color_t color) const { //in timepix frame, with telescope coordinates!
 	const int npoints=2;
 	double x[npoints] = {at(zmin), at(zmax)};
 	double z[npoints] = { zmin, zmax};
 	TPolyLine l( npoints, x, z );
-	l.SetLineColor(kOrange+7);
+	l.SetLineColor(color);
 	l.SetLineWidth(2);
 	l.DrawClone();
 }

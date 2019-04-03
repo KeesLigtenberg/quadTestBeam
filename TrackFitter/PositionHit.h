@@ -104,6 +104,21 @@ TVector3 getAveragePositionCondition(Container hv, std::function<bool(const Posi
 	sum*=(1./n);
 	return sum;
 }
+template<class Container>
+TVector3 getWeightedAveragePosition(Container hv, std::function<bool(const PositionHit&)> isValid) {
+	TVector3 sum(0,0,0);
+	TVector3 weightsum(0,0,0);
+	for(const PositionHit& hit : hv) {
+		if(not isValid(hit)) continue;
+		for(int i=0; i<3; i++) {
+			sum[i]+=hit.position[i]/hit.error[i]/hit.error[i];
+			weightsum[i]+=1./hit.error[i]/hit.error[i];
+		}
+	}
+	for(int i=0; i<3; i++)
+		sum[i]/=weightsum[i];
+	return sum;
+}
 
 
 template<class Container>
@@ -121,10 +136,10 @@ TVector3 getAveragePosition(Container hv, std::set<PositionHit::Flag> rejectFlag
 }
 
 template<class Container>
-std::vector<Vec3> getAveragePositionPerChip(Container hv) {
+std::vector<Vec3> getWeightedAveragePositionPerChip(Container hv) {
 	std::vector<Vec3> averages;
 	for(int i=0; i<4; i++) {
-		averages.push_back( getAveragePositionCondition(hv, [i](const PositionHit& h){ return h.isValid() && h.chip == i; } ) );
+		averages.push_back( getWeightedAveragePosition(hv, [i](const PositionHit& h){ return h.isValid() && h.chip == i; } ) );
 	}
 	return averages;
 }
@@ -136,6 +151,15 @@ std::vector<int> countHitsPerChip(const std::vector<PositionHit>& hits, bool rej
 		nHits[h.chip]++;
 	}
 	return nHits;
+}
+
+std::vector<std::vector<PositionHit> > getHitsPerChip(const std::vector<PositionHit>& hits, bool rejectFlagged=true) {
+	std::vector<std::vector<PositionHit>> perChip(4);
+	for(const auto& h : hits) {
+		if(rejectFlagged and not h.isValid()) continue;
+		perChip[h.chip].push_back(h);
+	}
+	return perChip;
 }
 
 int countTotalValidHits(const std::vector<PositionHit>& hits) { //simply use size() to get to total number of unflagged hits!

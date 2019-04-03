@@ -99,6 +99,19 @@ namespace {
 	}
 
 
+	PositionHit& correctzPerPixel(PositionHit& h){
+//		static TProfile2D* zResidualPerPixel=getObjectFromFile<TProfile2D>("zResidualByPixel", "pixelCorrection.root");
+		static TProfile2D* zResidualPerPixel=getObjectFromFile<TProfile2D>("correction", "/project/lepcol/users/cligtenb/quadTestBeam/run668/pixelCorrectionSmaller.root");
+		static TProfile* rowCorrection=getObjectFromFile<TProfile>("rowzCorrection", "/project/lepcol/users/cligtenb/quadTestBeam/run668/pixelCorrectionSmaller.root");
+		static TProfile* columnCorrection=getObjectFromFile<TProfile>("columnzCorrection", "/project/lepcol/users/cligtenb/quadTestBeam/run668/pixelCorrectionSmaller.root");
+		auto bin=zResidualPerPixel->GetBin((h.column)%zResidualPerPixel->GetNbinsX()+1,(h.row)%zResidualPerPixel->GetNbinsY()+1);
+//		if(zResidualPerPixel->GetBinEntries(bin) > 50 )
+				h.position.z+=zResidualPerPixel->GetBinContent(bin);
+				h.position.z+=std::max(std::min(rowCorrection->GetBinContent(h.row+1), 0.1),-0.1) ;
+				h.position.z+=std::max(std::min(columnCorrection->GetBinContent(h.column+1), 0.1),-0.1) ;
+		return h;
+	}
+
 }
 
 
@@ -113,7 +126,7 @@ struct ChipHistogrammer {
 	std::unique_ptr<TH2D> pixelHitMap;
 	std::unique_ptr<TH1D> xRotation, yRotation, zRotation;
 
-	std::unique_ptr<TH2D> zResidualByToT, zResidualByToTCorrected,zResidualByDriftTime;
+	std::unique_ptr<TH2D> zResidualByToT, xResidualByToT, zResidualByToTCorrected,zResidualByDriftTime;
 
 	struct residualHistograms {
 		residualHistograms(std::string name) : name{name} {};
@@ -145,7 +158,7 @@ struct ChipHistogrammer {
 			zResidualByXZ->Fill(position.x,position.z,residual.z);
 		}
 		void createHistograms(const PositionRange& range);
-	} global{"_global"}, local{"_local"}, locExp{"_locExp"}, corrected{"_corrected"}, tighterCuts{"_tighterCuts"};
+	} global{"_global"}, local{"_local"}, locExp{"_locExp"}, corrected{"_corrected"}, tighterCuts{"_tighterCuts"}, sideBands{"_sideBands"};
 	std::unique_ptr<TProfile2D> xResidualByPixel, zResidualByPixel;
 
 	void fillHit(const PositionHit& h);
@@ -181,6 +194,7 @@ ChipHistogrammer::ChipHistogrammer(std::string name, const Alignment& align) : d
 
 
 	zResidualByToT=std::unique_ptr<TH2D>(new TH2D{"zResidualByToT", "z-residual by ToT;ToT [#mus]; z-residual [mm]", 100,0,2.5, 200,-5,5});
+	xResidualByToT=std::unique_ptr<TH2D>(new TH2D{"xResidualByToT", "x-residual by ToT;ToT [#mus]; z-residual [mm]", 100,0,2.5, 200,-5,5});
 	zResidualByToTCorrected=std::unique_ptr<TH2D>(new TH2D{"zResidualByToTCorrected", "z-residual by ToT;ToT [#mus]; z-residual [mm]", 100,0,2.5, 200,-5,5});
 	zResidualByDriftTime=std::unique_ptr<TH2D>(new TH2D{"zResidualByDriftTime", "z-residuals as a function of drift time;Drift time [#mus];z-residual [mm]", int(0.8/ToABinWidth),-0.39999,0.4,50,-2,2});
 
@@ -193,9 +207,13 @@ ChipHistogrammer::ChipHistogrammer(std::string name, const Alignment& align) : d
 	locExp.createHistograms(rangeQuad);
 	corrected.createHistograms(rangeQuad);
 	tighterCuts.createHistograms(rangeQuad);
+	sideBands.createHistograms(rangeQuad);
 
 	xResidualByPixel=std::unique_ptr<TProfile2D>(new TProfile2D{"xResidualByPixel", "mean x-residual by pixel;Columns;Rows", 256,0,256,256,0,256});
 	zResidualByPixel=std::unique_ptr<TProfile2D>(new TProfile2D{"zResidualByPixel", "mean z-residual by pixel;Columns;Rows", 256,0,256,256,0,256});
+
+	xResidualByPixel->SetMinimum(-0.1), xResidualByPixel->SetMaximum(0.1);
+	zResidualByPixel->SetMinimum(-0.1), zResidualByPixel->SetMaximum(0.1);
 
 	startDir->cd();
 }
@@ -255,6 +273,7 @@ void ChipHistogrammer::fillHit(const PositionHit& h) {
 	ToT->Fill(h.ToT*25E-3);
 	pixelHitMap->Fill(h.column, h.row);
 	zResidualByToTCorrected->Fill(h.ToT*25E-3, h.residual.z);
+	xResidualByToT->Fill(h.ToT*25E-3, h.residual.x);
 	zResidualByDriftTime->Fill(h.driftTime/4096.*25E-3,h.residual.z);
 	nShiftedTrigger->Fill(h.nShiftedTrigger);
 	global.fill(h.position, h.residual, h.ToT);
@@ -308,6 +327,9 @@ std::vector<PositionHit> QuadTrackFitter::getSpaceHits(const Alignment& alignmen
 	for (auto& h : posHits) {
 		//apply alignment
 		h = alignment.totCorrections[h.chip].correct(h);
+
+		//corrections:
+
 		//do bin correction for columns 192, 193 (new quad)
 		if(h.column==192 or h.column==193) {
 			const double toaCorrection=25*alignment.driftSpeed.value;
@@ -321,15 +343,12 @@ std::vector<PositionHit> QuadTrackFitter::getSpaceHits(const Alignment& alignmen
 		} else { //even
 			h.position.z+=oddEvenCorrection;
 		}
+		//per pixel correction
+		h=correctzPerPixel(h);
+
 		h = alignment.timeWalks[h.chip].correct(h);
 		h = alignment.transform(h);
-		//			if(h.position.z<alignment.hitErrors.z0) h.flag=PositionHit::Flag::smallz;
 		h.error = alignment.hitErrors.hitError( alignment.quad.rotateAndShiftBack(h.position).z );
-		/*
-		 h.calculateResidual(laser);
-		 h=flagResidual(h, {2,2,2});
-		 h=flagResidualPull(h, {2,2,3});
-		 */
 	}
 	return posHits;
 }

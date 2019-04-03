@@ -52,7 +52,7 @@ void makeHistograms(std::string inputFileName, std::string outputFileName) {
 
 	std::deque<TriggerTreeReader::Trigger> triggers;
 	int triggerWindowUs=8E3;
-	int stepSizeUs=5;
+	int stepSizeUs=5; //409; //5
 	unsigned triggerWindow=triggerWindowUs*1E3/25*4096; //to stepsize units
 	TH1D triggerTime("triggerTime", "Trigger time offset;t - trigger time [us];Entries", triggerWindowUs/stepSizeUs, -triggerWindowUs/2,triggerWindowUs/2);
 	std::vector<std::unique_ptr<TH1D>> triggerTimeOffsetChip;
@@ -64,7 +64,12 @@ void makeHistograms(std::string inputFileName, std::string outputFileName) {
 	TProfile2D hitTimeBitsByTime("hitTimeBitsByTime", "Hit time time offset;t - trigger time [us];trigger bits", triggerWindowUs/stepSizeUs, -triggerWindowUs/2,triggerWindowUs/2, nBits, 0.5,nBits+.5);
 	TH2D triggerIndexByTime("triggerIndexByTime", "Hit time time offset;t - trigger time [us];trigger index", triggerWindowUs/stepSizeUs, -triggerWindowUs/2,triggerWindowUs/2, 100, 0,100);
 	TH1D timeBetweenTriggers("timeBetweenTriggers", "Time to previous trigger; Time to previous trigger [us]; Entries", triggerWindowUs/stepSizeUs, 0, 1000);
-	TH1D timeBetweenTracks("timeBetweenTracks", "Time to previous track (hits>70); Time to previous track [us]; Entries", triggerWindowUs/stepSizeUs, 0, 1000);
+	TH1D timeBetweenTracks("timeBetweenTracks", "Time to previous track (hits>N); Time to previous track [us]; Entries", triggerWindowUs/stepSizeUs, 0, 1000);
+	TH1D nHitsTotal("nHitsTotal", "Total number of hits", 1000,0,1000);
+	std::vector<std::unique_ptr<TH1D> > nHitsPerChip;
+	for(int i=0; i<4; i++) {
+		nHitsPerChip.emplace_back( new TH1D( ("nHitsPerChip"+std::to_string(i)).c_str(), ("Number of hits on chip "+std::to_string(i)).c_str(), 1000, 0, 1000)  ) ;
+	}
 
 //	std::cout<<"updating offset and bin width..\n";
 //	triggerReader.updateOffsetAndBinWidth(200);
@@ -78,7 +83,7 @@ void makeHistograms(std::string inputFileName, std::string outputFileName) {
 
 	auto startToA=(*std::min_element(chips.begin(),chips.end(), [](std::unique_ptr<ChipTreeReader>& tr1, std::unique_ptr<ChipTreeReader>& tr2){return tr1->toa<tr2->toa;}))->toa;
 	unsigned stepSize=stepSizeUs*1E3/25*4096; //to stepsize units
-	startToA+=1E9/25*4096;
+//	startToA+=1E9/25*4096;
 	double previousTrackt=0;
 //	std::cout<<"start is "<<startToA<<"\n";
 	for(auto t=startToA; not chips[0]->reachedEnd() and not triggerReader.reachedEnd(); t+=stepSize) {
@@ -86,7 +91,8 @@ void makeHistograms(std::string inputFileName, std::string outputFileName) {
 			std::cout<<"frame "<<frame<<" saved "<<outputTrees.triggerNumber<<"\r"<<std::flush;
 			if(!(frame%1000000)) {  std::cout<<"\nforcing autosave..\n"; outputTrees.tree.AutoSave();}
 		}
-		if( frame > 10E6  ) break;
+//		if( frame > 10E6  ) break;
+		if(outputTrees.triggerNumber>1E5) break;
 
 		//read triggers
 		while(triggers.size() and triggers.front().toa< t -triggerWindow/2) triggers.pop_front();
@@ -113,7 +119,7 @@ void makeHistograms(std::string inputFileName, std::string outputFileName) {
 		frame++;
 
 //		if(true) {
-		if(nHits[0]+nHits[1]>40 or nHits[2]+nHits[3]>40) {
+		if(nHits[0]+nHits[1]>20 or nHits[2]+nHits[3]>20) {
 //		if(nHits[0]>40) {
 //			if(nHits[0]+nHits[1]>70) {
 //				outputTrees.chips[2].clear();
@@ -123,7 +129,9 @@ void makeHistograms(std::string inputFileName, std::string outputFileName) {
 //				outputTrees.chips[0].clear();
 //				outputTrees.chips[1].clear();
 //			}
-			outputTrees.fill();
+
+			//TEMPORARELY DISABLE TREE WRITING!!!
+			//outputTrees.fill();
 			outputTrees.triggerNumber++;
 
 //			std::cout<<triggers.size()<<"\n";
@@ -154,9 +162,14 @@ void makeHistograms(std::string inputFileName, std::string outputFileName) {
 
 			if(std::cin.get()=='q') break;
 
+			nHitsTotal.Fill(nHits[0]+nHits[1]+nHits[2]+nHits[3]);
+			for(int i=0; i<4; i++) {
+				if(nHits[i]) nHitsPerChip[i]->Fill(nHits[i]);
+			}
+
 		}
 		for(int i=0; i<4; i++) {
-			if(nHits[i]>30) {
+			if(nHits[i]>20) {
 				for(auto& iTrigger : triggers) {
 	//				std::cout<<(t-iTrigger.toa)*0.025/4096<<"\n";
 					triggerTimeOffsetChip[i]->Fill( int(t-iTrigger.toa)*0.025/4096 ); //in us

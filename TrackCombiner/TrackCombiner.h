@@ -34,15 +34,16 @@ private:
 	std::unique_ptr<TTree> outputTree{nullptr};
 	std::array< std::unique_ptr<ChipHistogrammer>, nChips> hists{{}};
 	std::unique_ptr<ChipHistogrammer> quadHist{nullptr};
-	std::unique_ptr<TH1D> selectedHitAverageToTrackx, fractionInTrack, smallestShift, averageShift;
+	std::unique_ptr<TH1D> selectedHitAverageToTrackx, selectedHitAverageToTrackz, fractionInTrack, smallestShift, averageShift;
 	std::unique_ptr<TH1D> averageToTrackx;
 
 
 	struct TreeEntry {
 		std::vector<FitResult3D> telescopeFits;
 		std::vector<FitResult3D> timepixFits;
-		Vec3 meanQuadPosition, meanQuadDiff;
-		std::vector<Vec3> meanPositionPerChip, meanDiffPerChip;
+		Vec3 meanQuadPosition, meanQuadDiff, meanQuadError;
+		std::vector<Vec3> meanPositionPerChip, meanDiffPerChip, meanErrorPerChip;
+		std::vector<std::vector<Vec3>> meanDiffPerChipPerFitFirst, meanDiffPerChipPerFitLast;
 		std::vector<int> nHitsPerChip;
 		std::vector<int> nHitsPerChipValid;
 		std::vector<PositionHit> quadHits;
@@ -51,6 +52,7 @@ private:
 		unsigned telescopeTime;
 	} currentEntry;
 
+//	const int triggerOffset=100;//WARNING OUT OF SYNC!!!
 	const int triggerOffset=0;
 	int nTelescopeTriggers=0;
 	int previousTriggerNumberBegin=0, previousTriggerNumberEnd=0;

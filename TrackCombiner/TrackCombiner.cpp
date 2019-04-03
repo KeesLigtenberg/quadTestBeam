@@ -41,6 +41,17 @@ namespace {
 		return matched;
 	}
 
+	std::vector<PositionHit> getInTelescopeCoords( std::vector<PositionHit> hits ) {
+		std::vector<PositionHit> quadHitsInTelescopeCoords;
+		for(const auto& h : hits) {
+			PositionHit th{h};
+			std::swap(th.position.y, th.position.z);
+			std::swap(th.error.y, th.error.z);
+			quadHitsInTelescopeCoords.push_back(th);
+		}
+		return quadHitsInTelescopeCoords;
+	}
+
 }
 
 TrackCombiner::TrackCombiner(std::string quadFile, std::string telescopeFile, Alignment& alignment) :
@@ -70,9 +81,13 @@ void TrackCombiner::openFile(std::string outputFileName) {
 		outputTree->Branch("telescopeFits", "std::vector<FitResult3D>", &currentEntry.telescopeFits);
 		outputTree->Branch("timepixFits", "std::vector<FitResult3D>", &currentEntry.timepixFits);
 		outputTree->Branch("meanQuadPosition", "Vec3", &currentEntry.meanQuadPosition);
-		outputTree->Branch("meanPositionPerChip", "Vec3", &currentEntry.meanPositionPerChip);
-		outputTree->Branch("meanQuadDiff", "std::vector<Vec3>", &currentEntry.meanQuadDiff);
+		outputTree->Branch("meanPositionPerChip", "std::vector<Vec3>", &currentEntry.meanPositionPerChip);
+		outputTree->Branch("meanQuadDiff", "Vec3", &currentEntry.meanQuadDiff);
 		outputTree->Branch("meanDiffPerChip", "std::vector<Vec3>", &currentEntry.meanDiffPerChip);
+		outputTree->Branch("meanDiffPerChipPerFitFirst", "std::vector<std::vector<Vec3>>", &currentEntry.meanDiffPerChipPerFitFirst);
+		outputTree->Branch("meanDiffPerChipPerFitLast", "std::vector<std::vector<Vec3>>", &currentEntry.meanDiffPerChipPerFitLast);
+		outputTree->Branch("meanQuadError", "Vec3", &currentEntry.meanQuadError);
+		outputTree->Branch("meanErrorPerChip", "std::vector<Vec3>", &currentEntry.meanErrorPerChip);
 		outputTree->Branch("nHitsPerChip", "std::vector<int>", &currentEntry.nHitsPerChip);
 		outputTree->Branch("nHitsPerChipValid", "std::vector<int>", &currentEntry.nHitsPerChipValid);
 		outputTree->Branch("quadHits", "std::vector<PositionHit>", &currentEntry.quadHits);
@@ -91,6 +106,7 @@ void TrackCombiner::openFile(std::string outputFileName) {
 	auto top=gDirectory;
 	top->mkdir("eventCuts")->cd();
 	selectedHitAverageToTrackx=std::unique_ptr<TH1D>( new TH1D("selectedHitAverageToTrackx", "distance from average of selected hits to track;Distance [mm];Entries", 100,-1,1) );
+	selectedHitAverageToTrackz=std::unique_ptr<TH1D>( new TH1D("selectedHitAverageToTrackz", "distance from average of selected hits to track;Distance [mm];Entries", 100,-1,1) );
 	fractionInTrack=std::unique_ptr<TH1D>( new TH1D("fractionInTrack", "fraction of hits in track divided by hits in larger window;Fraction;Entries", 100,0,1) );
 	smallestShift=std::unique_ptr<TH1D>( new TH1D("smallestShift", "Smallest shift of all hits in track;Shift [409.6 #mus];",100,0,100) );
 	averageShift=std::unique_ptr<TH1D>( new TH1D("averageShift", "Average shift of all hits in track; Shift [409.6 #mus];", 100,0,100 ) );
@@ -110,7 +126,7 @@ void TrackCombiner::Process() {
 
 
 	for(int telescopeEntryNumber=0,tpcEntryNumber=0; //5000000, 2308829
-			telescopeEntryNumber<1E5 //telescopeFitter.nEvents//1000000
+			telescopeEntryNumber<1E6 //telescopeFitter.nEvents//1000000
 			;) {
 //		triggerStatusHistogram.reset();
 
@@ -153,11 +169,11 @@ void TrackCombiner::Process() {
  		std::vector<FitResult3D> timepixFits;
 
  		bool matched=false;
- 		FitResult3D* fittedTrack=nullptr; //todo: save element of array, because if reallocation happens, this pointer is invalidated!
+ 		FitResult3D *fittedTrack{nullptr}, timepixTrack{}; //todo: save element of array, because if reallocation happens, this pointer is invalidated!
  		for(auto&f : telescopeFits) {
 
  			//fiducial region
- 			const bool useFiducialExpected=true;
+ 			const bool useFiducialExpected=false;
  			if(useFiducialExpected) {
 				Vec3 expectedAtQuad{ f.xAt(193), 193, f.yAt(193) };
 				auto localExpectedAtQuad=alignment.quad.rotateAndShiftBack(expectedAtQuad);
@@ -184,16 +200,11 @@ void TrackCombiner::Process() {
 				}
 
 				//convert hits to telescope coordinates x,y,z -> x,z,y
-				std::vector<PositionHit> quadHitsInTelescopeCoords;
-				for(const auto& h : quadHitsWithResidual) {
-					PositionHit th{h};
-					std::swap(th.position.y, th.position.z);
-					std::swap(th.error.y, th.error.z);
-					quadHitsInTelescopeCoords.push_back(th);
-				}
+				auto quadHitsInTelescopeCoords=getInTelescopeCoords(quadHitsWithResidual);
 				//fit hits
- 	 			FitResult3D timepixFit=regressionFit3d(quadHitsInTelescopeCoords,0);
+ 	 			FitResult3D timepixFit=regressionFit3d(quadHitsInTelescopeCoords);
  	 			timepixFits.push_back(timepixFit);
+ 	 			//set error and calculate resolution
  	 			for(auto& h : quadHitsWithResidual) {
  	 				Vec3 timepixExpectedPos{h.position.x, h.position.y, timepixFit.yAt(h.position.z)};
  	 				h.error=alignment.hitErrors.hitError( alignment.quad.rotateAndShiftBack(timepixExpectedPos).z );
@@ -218,13 +229,15 @@ void TrackCombiner::Process() {
 				fractionInTrack->Fill(fraction);
 
 				//average pos
-				auto avPosition = getAveragePosition(quadHitsWithResidual,true);
-				double averageDist=avPosition.x() - f.xAt(avPosition.y()) ;
-				selectedHitAverageToTrackx->Fill(averageDist);
+				auto avPosition =getWeightedAveragePosition(quadHitsWithResidual, [](const PositionHit& h){return h.isValid();}); //reject all flagged
+				double averageDistx=avPosition.x() - f.xAt(avPosition.y()) ;
+				double averageDistz=avPosition.z() - f.yAt(avPosition.y()) ;
+				selectedHitAverageToTrackx->Fill(averageDistx);
+				selectedHitAverageToTrackz->Fill(averageDistz);
 
 				//first occurence (shift) and average shift
-				if(drawEvent) std::cout<<"dist "<<averageDist<<" frac "<<fraction<<"\n";
-				if ( std::fabs(averageDist) > 1 || fraction<0.8 ) {
+				if(drawEvent) std::cout<<"dist "<<averageDistx<<", "<<averageDistz<<" frac "<<fraction<<"\n";
+				if ( std::fabs(averageDistx) > 0.3 || std::fabs(averageDistz) > 0.3 || fraction<0.8 ) {
 					if(drawEvent) std::cout<<"More than 20 hits along track, but average position did not match or fraction to low!\n";
 					continue;
 				}
@@ -247,8 +260,8 @@ void TrackCombiner::Process() {
 					continue;
 				}
 
-
 				matched = true;
+
 				const bool useTimepixFit=false;
 				if(useTimepixFit) {
 					fittedTrack=&timepixFit;
@@ -257,6 +270,7 @@ void TrackCombiner::Process() {
 					fittedTrack=&f;
 				}
 				quadHits=quadHitsWithResidual;
+				timepixTrack=timepixFit;
 				break;
 
  			} else {
@@ -299,6 +313,9 @@ void TrackCombiner::Process() {
  				if(fabs(h.residual.z/h.error.z)<1.5) {
  					hists[h.chip]->tighterCuts.fill( localExpectedPosition, localResidual, h.ToT );
  					quadHist->tighterCuts.fill( localExpectedPosition, localResidual, h.ToT );
+ 				} else {
+ 					hists[h.chip]->sideBands.fill( localExpectedPosition, localResidual, h.ToT );
+ 					quadHist->sideBands.fill( localExpectedPosition, localResidual, h.ToT );
  				}
 
  				auto correctedResidual=localResidual;
@@ -310,7 +327,6 @@ void TrackCombiner::Process() {
 			auto averagePos=getAveragePosition(quadHits, true);
 			averageToTrackx->Fill( averagePos.x()-fittedTrack->xAt(averagePos.y()) );
  		}
-
 
 		for(auto& h : hists) {
 			h->fillEvent();
@@ -347,26 +363,68 @@ void TrackCombiner::Process() {
 				alignment.drawChipEdges();
 				for (auto& f : telescopeFits)
 					f.XZ.draw( setupForDrawing.ymin(), setupForDrawing.ymax() );
+				for (auto& f : timepixFits)
+					f.XZ.draw( setupForDrawing.ymin(), setupForDrawing.ymax(), kTeal );
 				gPad->Update();
 			}
-
 
 			gPad->Update();
 			if(processDrawSignals()) break;
 		}
 
-		if(outputTree) {
+		if(outputTree and matched) {
+			//make timepix fit per chip
+			auto hitsPerChip=getHitsPerChip(getInTelescopeCoords(quadHits));
+			std::vector<std::unique_ptr<FitResult3D>> fitsPerChip, fitsPerChipWithFirstPlanes, fitsPerChipWithLastPlanes;
+ 			for(auto& hv : hitsPerChip) {
+ 				if(hv.size()>=2) {
+ 					fitsPerChip.emplace_back( new FitResult3D(regressionFit3d(hv)) );
+
+ 					//make fits with telescope point
+ 					double firstPlanesz=mimosa.planePosition[2], lastPlanesz=mimosa.planePosition[3];
+ 					PositionHit firstThreePlanes{ fittedTrack->xAt(firstPlanesz), fittedTrack->yAt(firstPlanesz), firstPlanesz,0};
+ 					firstThreePlanes.error=Vec3{0.010,0.010,1};
+ 					PositionHit lastThreePlanes{ fittedTrack->xAt(lastPlanesz), fittedTrack->yAt(lastPlanesz), lastPlanesz,0};
+ 					lastThreePlanes.error=Vec3{0.010,0.010,1};
+
+ 					hv.push_back(firstThreePlanes);
+ 					fitsPerChipWithFirstPlanes.emplace_back( new FitResult3D(regressionFit3d(hv)) );
+
+ 					hv.back()=lastThreePlanes;
+ 					fitsPerChipWithLastPlanes.emplace_back( new FitResult3D(regressionFit3d(hv)) );
+
+ 				} else {
+ 					fitsPerChip.push_back( nullptr );
+ 					fitsPerChipWithFirstPlanes.push_back(nullptr);
+ 					fitsPerChipWithLastPlanes.push_back(nullptr);
+ 				}
+			}
+
 			currentEntry.telescopeFits=telescopeFits;
 			currentEntry.timepixFits=timepixFits;
 //			currentEntry.meanQuadPosition=getAveragePosition(quadHits, {PositionHit::Flag::shiftedTrigger});
-			currentEntry.meanQuadPosition=getAveragePosition(quadHits, true); //reject all flagged
-			currentEntry.meanPositionPerChip=getAveragePositionPerChip(quadHits);
+			currentEntry.meanQuadPosition=getWeightedAveragePosition(quadHits, [](const PositionHit& h){return h.isValid();}); //reject all flagged
+			currentEntry.meanPositionPerChip=getWeightedAveragePositionPerChip(quadHits);
 			currentEntry.meanQuadDiff.x=matched ? (currentEntry.meanQuadPosition.x - fittedTrack->xAt(currentEntry.meanQuadPosition.y)) : 0;
 			currentEntry.meanQuadDiff.z=matched ? (currentEntry.meanQuadPosition.z - fittedTrack->yAt(currentEntry.meanQuadPosition.y)) : 0;
+			currentEntry.meanQuadError.x=matched ? (timepixTrack.XZ.errorAt(currentEntry.meanQuadPosition.y)) : 0;
+			currentEntry.meanQuadError.z=matched ? (timepixTrack.YZ.errorAt(currentEntry.meanQuadPosition.y)) : 0;
 			currentEntry.meanDiffPerChip=std::vector<Vec3>(4);
+			currentEntry.meanErrorPerChip=std::vector<Vec3>(4);
+			currentEntry.meanDiffPerChipPerFitFirst=std::vector<std::vector<Vec3>>{4,std::vector<Vec3>{4}};
+			currentEntry.meanDiffPerChipPerFitLast=std::vector<std::vector<Vec3>>{4,std::vector<Vec3>{4}};
 			for(int i=0; i<4; i++) {
 				currentEntry.meanDiffPerChip[i].x =	matched ? (currentEntry.meanPositionPerChip[i].x - fittedTrack->xAt(currentEntry.meanPositionPerChip[i].y) ) : 0;
 				currentEntry.meanDiffPerChip[i].z =	matched ? (currentEntry.meanPositionPerChip[i].z - fittedTrack->yAt(currentEntry.meanPositionPerChip[i].y) ) : 0;
+				currentEntry.meanErrorPerChip[i].x = matched && fitsPerChip[i] ? (fitsPerChip[i]->XZ.errorAt(currentEntry.meanPositionPerChip[i].y)) : 0;
+				currentEntry.meanErrorPerChip[i].z = matched && fitsPerChip[i] ? (fitsPerChip[i]->YZ.errorAt(currentEntry.meanPositionPerChip[i].y)) : 0;
+				for(int j=0; j<4; j++) {
+					currentEntry.meanDiffPerChipPerFitFirst[i][j].x=fitsPerChipWithFirstPlanes[j] ? (currentEntry.meanPositionPerChip[i].x - fitsPerChipWithFirstPlanes[j]->xAt(currentEntry.meanPositionPerChip[i].y) ) : 0;
+					currentEntry.meanDiffPerChipPerFitFirst[i][j].z=fitsPerChipWithFirstPlanes[j] ? (currentEntry.meanPositionPerChip[i].z - fitsPerChipWithFirstPlanes[j]->yAt(currentEntry.meanPositionPerChip[i].y) ) : 0;
+
+					currentEntry.meanDiffPerChipPerFitLast[i][j].x=fitsPerChipWithLastPlanes[j] ? (currentEntry.meanPositionPerChip[i].x - fitsPerChipWithLastPlanes[j]->xAt(currentEntry.meanPositionPerChip[i].y) ) : 0;
+					currentEntry.meanDiffPerChipPerFitLast[i][j].z=fitsPerChipWithLastPlanes[j] ? (currentEntry.meanPositionPerChip[i].z - fitsPerChipWithLastPlanes[j]->yAt(currentEntry.meanPositionPerChip[i].y) ) : 0;
+				}
 			}
 			currentEntry.nHitsPerChip=nHitsPerChip;
 			currentEntry.nHitsPerChipValid=countHitsPerChip(quadHits,true);
@@ -385,10 +443,10 @@ void TrackCombiner::Process() {
 	if(not drawEvent and outputTree) {
 		static TCanvas* xCorrelation= new TCanvas();
 		xCorrelation->cd();
-		outputTree->Draw("XZ.intercept+XZ.slope*172:x", "", "", 5E4);
+		outputTree->Draw("XZ.intercept+XZ.slope*172:x", "", "", 1E4);
 		static TCanvas* yCorrelation= new TCanvas();
 		yCorrelation->cd();
-		outputTree->Draw("YZ.intercept+YZ.slope*172:z", "fabs(XZ.intercept+XZ.slope*172-x)<3", "", 5E4);
+		outputTree->Draw("YZ.intercept+YZ.slope*172:z", "fabs(XZ.intercept+XZ.slope*172-x)<3", "", 1E4);
 	}
 }
 
