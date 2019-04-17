@@ -12,6 +12,7 @@
 
 
 #include "TF1.h"
+#include "TF2.h"
 
 //peters correction
 //double deformationCorrection(int ichip, double x) {
@@ -42,8 +43,8 @@
 //}
 
 
-static auto correction=new TF1("correction",
-		"breitwigner(0)+breitwigner(3)+breitwigner(6)+breitwigner(9)+[offset]");
+//static auto correction=new TF1("correction",
+//		"breitwigner(0)+breitwigner(3)+breitwigner(6)+breitwigner(9)+[offset]");
 
 const std::vector<std::vector<double>> deformationCorrectionParameters{
 	{2.61443, 0.100941, 1.61043, -1.52508, 0.926549, 1.86461, 1.36493, 13.126, 1.96334, -3.15446, 14.3033, 1.87523, -0.000113656},
@@ -59,6 +60,17 @@ double deformationCorrection(int ichip, double x, const std::vector<std::vector<
 	for(std::size_t i=0;i<p[ichip].size();i++) correction->SetParameter(i,p[ichip][i]);
 
 	return correction->Eval(x);
+}
+
+double deformationCorrection2D(int ichip, double x, double y, const std::vector<std::vector<double>>& p=deformationCorrectionParameters) {
+	auto correction=new TF2("correction",
+			"(1+[b0]*y+[c0]*y*y+[d0]*y*y*y+[e0]*y*y*y*y)*breitwigner(0)+(1+[b1]*y+[c1]*y*y+[d1]*y*y*y+[e1]*y*y*y*y)*breitwigner(3) "
+			"+"
+			"(1+[b2]*y+[c2]*y*y+[d2]*y*y*y+[e2]*y*y*y*y)*breitwigner(6)+(1+[b3]*y+[c3]*y*y+[d3]*y*y*y+[e3]*y*y*y*y)*breitwigner(9)+[offset]");
+
+	for(std::size_t i=0;i<p[ichip].size();i++) correction->SetParameter(i,p[ichip][i]);
+
+	return correction->Eval(x,y);
 }
 
 //double deformationCorrection(int ichip, double x) {

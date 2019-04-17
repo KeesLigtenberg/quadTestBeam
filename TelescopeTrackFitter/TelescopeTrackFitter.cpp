@@ -189,7 +189,7 @@ void TelescopeTrackFitter::fitTracks(std::string outputfilename) {
 
 	//loop over all entries
 	long int nPassed=0,nClusters=0;
-	for( int iEvent=0; iEvent<1E5 //nEvents
+	for( int iEvent=0; iEvent<2E5 //nEvents
 	; iEvent++ ) {
 
 		if(!(iEvent%10000))
@@ -219,10 +219,14 @@ void TelescopeTrackFitter::fitTracks(std::string outputfilename) {
 		houghTransform.minClusterSize=5;
 		auto houghClusters = doBinnedClustering ? binnedClustering(spaceHit) : houghTransform(spaceHit);
 
-		//require at least nmin planes to be hit
-		const int nMinPlanesHit=5;
-		houghClusters.remove_if([](const HoughTransformer::HitCluster& hc){return hc.getNPlanesHit()<nMinPlanesHit; });
 		if(!houghClusters.size()) {
+			if(displayEvent) std::cout<<"no hough clusters found\n";
+			continue;
+		}
+		//require at least nmin planes to be hit
+		houghClusters.remove_if([this](const HoughTransformer::HitCluster& hc){return hc.getNPlanesHit()<nMinPlanesHit; });
+		if(!houghClusters.size()) {
+			if(displayEvent) std::cout<<"no hough clusters found with the minimum number of planes hit\n";
 			continue;
 		}
 
@@ -230,7 +234,10 @@ void TelescopeTrackFitter::fitTracks(std::string outputfilename) {
 		for(auto& hitCluster : houghClusters) {
 
 			//fit track
-			if(hitCluster.size()<2 || hitCluster.recalculateNPlanesHit()<=1) continue;
+			if(hitCluster.size()<2 || hitCluster.recalculateNPlanesHit()<=1) {
+				if(displayEvent) std::cout<<"not enough planes hit in hough cluster\n";
+				continue;
+			}
 
 			fit=regressionFit3d(hitCluster);
 			if(!fit.isValid()) {cerr<<"fit not valid!"<<endl;  continue;	}
@@ -242,19 +249,24 @@ void TelescopeTrackFitter::fitTracks(std::string outputfilename) {
 			//refit on planes with selection
 			HoughTransformer::HitCluster selectedHits;
 			std::copy_if(hitCluster.begin(), hitCluster.end(), std::back_inserter(selectedHits), selectHitForRefit );
-			if(selectedHits.size()<5 || selectedHits.recalculateNPlanesHit()<5) continue;
+			if((int) selectedHits.size()<nMinPlanesHit || selectedHits.recalculateNPlanesHit()<nMinPlanesHit) {
+				if(displayEvent) std::cout<<"not enough planes hit in hough cluster after refit selection\n";
+				continue;
+			}
+
 			if(constructLineParallelToZ) fit = makeLinesParallelToZ( selectedHits.front().position.x, selectedHits.front().position.y );
 			else fit=regressionFit3d(selectedHits);
 
 
-			HoughTransformer::HitCluster hitsFirstThree;
-			std::copy_if(selectedHits.begin(), selectedHits.end(), std::back_inserter(hitsFirstThree), [](const PositionHit& h){ return h.chip<=2;} );
-			fitFirstThree=regressionFit3d(hitsFirstThree);
+			if(doPartialFits) {
+				HoughTransformer::HitCluster hitsFirstThree;
+				std::copy_if(selectedHits.begin(), selectedHits.end(), std::back_inserter(hitsFirstThree), [](const PositionHit& h){ return h.chip<=2;} );
+				fitFirstThree=regressionFit3d(hitsFirstThree);
 
-			HoughTransformer::HitCluster hitsSecondThree;
-			std::copy_if(selectedHits.begin(), selectedHits.end(), std::back_inserter(hitsSecondThree), [](const PositionHit& h){ return h.chip>=3 and h.chip<=5;} );
-			fitSecondThree=regressionFit3d(hitsSecondThree);
-
+				HoughTransformer::HitCluster hitsSecondThree;
+				std::copy_if(selectedHits.begin(), selectedHits.end(), std::back_inserter(hitsSecondThree), [](const PositionHit& h){ return h.chip>=3 and h.chip<=5;} );
+				fitSecondThree=regressionFit3d(hitsSecondThree);
+			}
 
 			if(!fit.isValid()) {cerr<<"fit not valid!"<<endl; continue;	}
 
@@ -311,7 +323,7 @@ void TelescopeTrackFitter::fitTracks(std::string outputfilename) {
 
 	}
 
-	std::cout<<"\npassed: "<<nPassed<<"/"<<nEvents<<" with "<<nClusters<<"tracks \n\n";
+	std::cout<<"\npassed: "<<nPassed<<"/"<<nEvents<<" with "<<nClusters<<" tracks \n\n";
 
 	//Recalculate centre of mass of hits for each plane
 	if(recalculateCOM) {

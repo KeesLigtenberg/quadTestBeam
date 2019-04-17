@@ -52,6 +52,7 @@ void FitTracks (std::string inputfile, int nRepeatFit=6) {
 	telescopeFitter.makeMask(5e3);
 //	telescopeFitter.setShifts( { {0,0}, {0,0}, {0,0}, {0,4}, {0,4}, {0,4} } );
 //	telescopeFitter.doBinnedClustering=true;
+	telescopeFitter.nMinPlanesHit=2;
 
 	//initialise alignment parameters
 	double recursion[nRepeatFit],
@@ -75,7 +76,10 @@ void FitTracks (std::string inputfile, int nRepeatFit=6) {
 				if(i>=3) telescopeFitter.makeTrackHistograms=true;
 
 				if(i<=2) telescopeFitter.selectHitForRefit=[](const PositionHit& h) {return h.chip==firstRefPlane || h.chip==secondRefPlane ;};
-				else telescopeFitter.selectHitForRefit=[](const PositionHit& h) {return true;};
+				else {
+					telescopeFitter.selectHitForRefit=[](const PositionHit& h) {return true;};
+					telescopeFitter.nMinPlanesHit=5;
+				}
 
 				if(i==1) telescopeFitter.constructLineParallelToZ=true;
 				else telescopeFitter.constructLineParallelToZ=false;

@@ -117,7 +117,7 @@ inline double getDriftSpeedFactor(TFile& file, bool draw) {
 	TH2D* zResidualByz = getObjectFromFile<TH2D>("quad/locExp/"+histogramName, &file);
 
 //	std::cout<<"fit slices!\n";
-	TF1* gausRange=new TF1("gausRange","gaus(0)", -3,3);
+	TF1* gausRange=new TF1("gausRange","gaus(0)", -0.4,0.4);
 	gausRange->SetParameters(4E4,0.05,0.22);
 	zResidualByz->FitSlicesY(gausRange,0,-1, 5, "QNR");
 

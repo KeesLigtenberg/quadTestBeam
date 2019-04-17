@@ -44,6 +44,8 @@ private:
 		Vec3 meanQuadPosition, meanQuadDiff, meanQuadError;
 		std::vector<Vec3> meanPositionPerChip, meanDiffPerChip, meanErrorPerChip;
 		std::vector<std::vector<Vec3>> meanDiffPerChipPerFitFirst, meanDiffPerChipPerFitLast;
+		std::vector<std::vector<Vec3>> meanErrorPerChipPerFitFirst, meanErrorPerChipPerFitLast;
+		Vec3 centerDiffPerChipFit, centerErrorPerChipFit;
 		std::vector<int> nHitsPerChip;
 		std::vector<int> nHitsPerChipValid;
 		std::vector<PositionHit> quadHits;

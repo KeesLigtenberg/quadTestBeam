@@ -8,6 +8,7 @@
 #include "TTreeReader.h"
 #include "TTreeReaderArray.h"
 #include "TH3.h"
+#include "TF2.h"
 
 #include "/user/cligtenb/rootmacros/getObjectFromFile.h"
 #include "/user/cligtenb/rootmacros/getHistFromTree.h"
@@ -15,6 +16,7 @@
 #include "/user/cligtenb/rootmacros/histogramOperations.h"
 #include "/user/cligtenb/rootmacros/StatsWrapper.h"
 #include "/user/cligtenb/rootmacros/CombineHistogramsFromTree.h"
+#include "/user/cligtenb/rootmacros/CombineHistogramsFromFiles.h"
 
 //#include "../rootmacros/getObjectFromFile.h"
 //#include "../rootmacros/getHistFromTree.h"
@@ -822,7 +824,9 @@ std::vector<std::vector<double>> fitDeformationCorrections(
 	return estimatedValues;
 }
 
-void fitDeformationCorrectionsPerSlice(
+
+
+void fitDeformationCorrectionsPerSliceZ(
 		std::vector<std::string> fileNames={"./run668/combinedFit.root","./run672/combinedFit.root","./run676/combinedFit.root"}) {
 
 	auto correction=new TF1("correction",
@@ -835,7 +839,7 @@ void fitDeformationCorrectionsPerSlice(
 			{7,14,2.6, /*breit wigner 1*/ -3,15,3, /*breit wigner 1*/3, 27, 3, /*breit wigner 4*/ -8, 28, 2,/*breit wigner 4*/ 0 /*offset*/ },
 			{7,14,2.6, /*breit wigner 1*/ -3,15,3, /*breit wigner 1*/3, 27, 3, /*breit wigner 4*/ -8, 28, 2,/*breit wigner 4*/ 0 /*offset*/ } };
 
-	const std::string parNames[13] = { "scale", "mean", "width", "scale", "mean", "width", "scale", "mean", "width", "scale", "mean", "width", "offset" };
+	const std::string parNames[13] = { "scale", "mean", "sigma", "scale", "mean", "sigma", "scale", "mean", "sigma", "scale", "mean", "sigma", "offset" };
 
 
 	gStyle->SetOptStat(0);
@@ -858,7 +862,7 @@ void fitDeformationCorrectionsPerSlice(
 		std::vector<TH1*> fittedParams;
 		for(int j=0; j<13; j++) {
 			auto h=newProjectionHistogram(xResidualByXZ, "_c"+std::to_string(iChip)+"f"+std::to_string(j), "x");
-			h->SetTitle(("Chip "+to_string(iChip)+";z-position [mm]; parameter "+parNames[j] ).c_str() );
+			h->SetTitle(("Chip "+to_string(iChip)+";z-position [mm]; parameter '"+parNames[j]+"'" ).c_str() );
 			fittedParams.push_back( h );
 		}
 
@@ -881,11 +885,153 @@ void fitDeformationCorrectionsPerSlice(
 			return;
 		});
 
-		HistogramCombiner comb("comb", {fittedParams[2], fittedParams[5], fittedParams[8], fittedParams[11]});
+		HistogramCombiner comb("comb", {fittedParams[0], fittedParams[3], fittedParams[6], fittedParams[9]});
 		comb.setStyle(7);
 		comb.makeLegend=false;
 		comb.createCombinedOnCanvas(gPad);
 	}
+}
+
+std::vector<std::vector<double>> fitDeformationCorrectionsPerSliceY(
+		std::vector<std::string> fileNames={"./run668/combinedFit.root","./run672/combinedFit.root","./run676/combinedFit.root"}) {
+
+	auto correction=new TF1("correction",
+			"breitwigner(0)+breitwigner(3) "
+			"+"
+			"breitwigner(6)+breitwigner(9)+[offset]");
+	std::vector<std::vector<double> > estimatedValues=fitDeformationCorrections(fileNames);
+
+	const std::string parNames[13] = { "scale", "mean", "sigma", "scale", "mean", "sigma", "scale", "mean", "sigma", "scale", "mean", "sigma", "offset" };
+
+
+	gStyle->SetOptStat(0);
+	gStyle->SetOptFit(0);
+
+	auto xByXZCanvas=new TCanvas("xByXY", "xByXY", 1000,1000);
+	xByXZCanvas->Divide(2,2);
+	auto fitParametersCanvas=new TCanvas("fitSlices", "fitSlices", 1000,1000);
+	fitParametersCanvas->Divide(2,2);
+
+	for(int iChip=0; iChip<4; iChip++) {
+		std::cout<<"\n\n";
+		xByXZCanvas->cd(iChip+1);
+		gPad->SetTicks(1,1);
+		auto xResidualByXY=getCombinedDeformations(chipDirectories[iChip]+"/locExp/xResidualByPosition",fileNames);
+		xResidualByXY->Rebin2D(4,16);
+		//xResidualByXZ->SetAxisRange(-2,10,"Y");
+		xResidualByXY->Draw("colz0");
+
+		std::vector<TH1*> fittedParams;
+		for(int j=0; j<13; j++) {
+			auto h=newProjectionHistogram(xResidualByXY, "_c"+std::to_string(iChip)+"f"+std::to_string(j), "x");
+			h->SetTitle(("Chip "+to_string(iChip)+";y-position [mm]; parameter '"+parNames[j]+"'" ).c_str() );
+			fittedParams.push_back( h );
+		}
+
+		const int selectedParameter=0;
+		fitParametersCanvas->cd(iChip+1);
+		int iSlice=0;
+		forEachSlice(xResidualByXY, "x", [&](TH1* proj) {
+			iSlice++;
+			if(proj->GetEntries()<100) return;
+			for(int j=0; j<correction->GetNpar(); j++) {
+				if(j%3==selectedParameter)
+					correction->SetParameter( j, estimatedValues[iChip][j] );
+				else
+					correction->FixParameter( j, estimatedValues[iChip][j] );
+			}
+			proj->Fit(correction, "QS", "");//, chipRange[i].min, chipRange[i].max);
+
+			for(int j=0; j<correction->GetNpar()-1; j++) {
+				auto parameterValue=correction->GetParameter(j);
+				fittedParams[j]->SetBinContent(iSlice, parameterValue );
+				fittedParams[j]->SetBinError( iSlice, correction->GetParError(j));
+			}
+
+//			proj->DrawCopy();
+//			gPad->Update();
+//			std::cin.get();
+			return;
+		});
+
+		estimatedValues[iChip].resize(33);
+		estimatedValues[iChip][32]=estimatedValues[iChip][12];
+		for(int iPar=0; iPar<4; iPar++) {
+			auto fitResult = fittedParams[iPar*3+selectedParameter]->Fit("pol4", "QSM");
+			auto aCoefficient=fitResult->GetParams()[0];
+			estimatedValues[iChip][iPar*3+selectedParameter]=aCoefficient;
+			for(int iFit=1; iFit<5; iFit++) {
+				estimatedValues[iChip][12+iPar+4*(iFit-1)]=fitResult->GetParams()[iFit]/aCoefficient;
+				std::cout<<iFit<<": "<<fitResult->GetParams()[iFit]/aCoefficient<<"\n";
+			}
+		}
+
+		HistogramCombiner comb("comb", {fittedParams[0+selectedParameter], fittedParams[3+selectedParameter], fittedParams[6+selectedParameter], fittedParams[9+selectedParameter]});
+		comb.setStyle(7);
+		comb.makeLegend=false;
+		comb.createCombinedOnCanvas(gPad);
+	}
+
+	return estimatedValues;
+}
+
+
+std::vector<std::vector<double>> fitDeformationCorrections2D(
+		std::vector<std::string> fileNames={"./run668/combinedFit.root","./run672/combinedFit.root","./run676/combinedFit.root"},
+		std::string histName="locExp/xResidualByPosition"
+) {
+	auto correction=new TF2("correction",
+			"(1+[b0]*y+[c0]*y*y+[d0]*y*y*y+[e0]*y*y*y*y)*breitwigner(0)+(1+[b1]*y+[c1]*y*y+[d1]*y*y*y+[e1]*y*y*y*y)*breitwigner(3) "
+			"+"
+			"(1+[b2]*y+[c2]*y*y+[d2]*y*y*y+[e2]*y*y*y*y)*breitwigner(6)+(1+[b3]*y+[c3]*y*y+[d3]*y*y*y+[e3]*y*y*y*y)*breitwigner(9)+[offset]");
+	std::vector<std::vector<double> > estimatedValues=fitDeformationCorrectionsPerSliceY(fileNames);
+//	{
+//			{7,1,2.6, /*breit wigner 1*/ -3,2,3, /*breit wigner 1*/3, 14, 3, /*breit wigner 4*/ -8, 15, 2,/*breit wigner 4*/   1,1,1,1, 1,1,1,1, 1E-2,1E-2,1E-2,1E-2, 1E-3,1E-3,1E-3,1E-3, 0,0,0,0, /*a,b,c,d,e*/ 0 /*offset*/ },
+//			{7,1,2.6, /*breit wigner 1*/ -3,2,3, /*breit wigner 1*/3, 14, 3, /*breit wigner 4*/ -8, 15, 2,/*breit wigner 4*/   1,1,1,1, 1,1,1,1, 1E-2,1E-2,1E-2,1E-2, 1E-3,1E-3,1E-3,1E-3, 0,0,0,0, /*a,b*/  0 /*offset*/ },
+//			{7,14,2.6, /*breit wigner 1*/ -3,15,3, /*breit wigner 1*/3, 27, 3, /*breit wigner 4*/ -8, 28, 2,/*breit wigner 4*/ 1,1,1,1, 1,1,1,1, 1E-2,1E-2,1E-2,1E-2, 1E-3,1E-3,1E-3,1E-3, 0,0,0,0, /*a,b*/  0 /*offset*/ },
+//			{7,14,2.6, /*breit wigner 1*/ -3,15,3, /*breit wigner 1*/3, 27, 3, /*breit wigner 4*/ -8, 28, 2,/*breit wigner 4*/ 1,1,1,1, 1,1,1,1, 1E-2,1E-2,1E-2,1E-2, 1E-3,1E-3,1E-3,1E-3, 0,0,0,0, /*a,b*/  0 /*offset*/ } };
+
+//	auto fitted1DValues = fitDeformationCorrections(fileNames, histName);
+//
+//	for(int i=0; i<4; i++) {
+//		for(int j=0; j<fitted1DValues[i].size()-1; j++) {
+//			estimatedValues[i][j]=fitted1DValues[i][j];
+//		}
+//		estimatedValues[i][32]=fitted1DValues[i][12];
+//	}
+
+
+
+	gStyle->SetOptStat(0);
+	gStyle->SetOptFit(0);
+
+	auto canv=new TCanvas();
+	canv->Divide(2,2);
+
+	std::cout<<"{";
+	for(int i=0; i<4; i++) {
+		canv->cd(i+1);
+		gPad->SetTicks(1,1);
+
+//		auto xResidualByPosition=getObjectFromFile<TProfile2D>(chipDirectories[i]+"/xResidualByPosition_locExp", fileName );
+		auto xResidualByPosition=getCombinedDeformations(chipDirectories[i]+"/"+histName,fileNames);
+		xResidualByPosition->Rebin2D(4,4);
+		xResidualByPosition->Draw("colz0");
+
+		for(int j=0; j<correction->GetNpar(); j++) correction->SetParameter( j, estimatedValues[i][j] );
+
+		xResidualByPosition->Fit(correction, "QS", "");//, chipRange[i].min, chipRange[i].max);
+		//xResidualByPosition->SetTitle(";x-position [mm];x-residual [mm]");
+
+		std::cout<<"{";
+		for(int j=0; j<correction->GetNpar(); j++) {
+			if(j==correction->GetNpar()-1) std::cout<<correction->GetParameter(j)<<( i!=3 ? "},\n" : "}}\n");
+			else std::cout<<correction->GetParameter(j)<<", ";
+			estimatedValues[i][j]=correction->GetParameter(j);
+		}
+	}
+
+	return estimatedValues;
 }
 
 
@@ -1094,6 +1240,35 @@ TProfile2D* correctDeformation(
 	return corrected;
 }
 
+
+TProfile2D* correctDeformation2D(
+		std::vector<std::string> fileNames={"./run668/combinedFit.root","./run672/combinedFit.root","./run676/combinedFit.root"},
+		std::string histName="locExp/xResidualByPosition",
+		std::string alignFile="run668/align.dat") {
+	auto parameters=fitDeformationCorrections2D(fileNames); //fitDeformationCorrectionsPerSliceY(fileNames);
+	auto xResidualByPosition=getCombinedDeformations("quad/"+histName,fileNames);
+
+	xResidualByPosition->Rebin2D(4,4);
+
+	Alignment align(alignFile);
+	auto corrected=makeAppliedByPosition(xResidualByPosition, [&](double xres, double x, double y) {
+		auto chipNumber=align.getChipNumber({x,y,0});
+		if(chipNumber) xres-=deformationCorrection2D(chipNumber-1, x, y, parameters);
+		return xres;
+	}, "corrected");
+
+	corrected->SetMinimum(-0.1);
+	corrected->SetMaximum(0.1);
+
+	//rebin
+//	corrected->Rebin2D(4,4);
+	removeBinsWithFewerEntries(corrected, 800);
+
+	drawDeformationsWithAreas(corrected);
+	return corrected;
+}
+
+
 void compareDeformationSlices(
 		std::vector<std::string> fileNames={"./run668/combinedFit.root","./run672/combinedFit.root","./run676/combinedFit.root"},
 		std::string name1="locExp/xResidualByXYZ2", std::string name2="locExp/xResidualByXYZ3"
@@ -1174,15 +1349,26 @@ void drawPartialFitResidual(std::string filename="combinedFit.root") {
 	auto tree = getObjectFromFile<TTree>("fitResults",filename);
 
 	for(std::string x : {"x","z"} ) {
-		combineHistogramsFromTree(*tree, { "meanDiffPerChipPerFitLast[0][1]."+x,	"meanDiffPerChipPerFitFirst[0][1]."+x},
-				"fabs(meanDiffPerChipPerFitLast[0][1]."+x+")>1E-10 && fabs(meanDiffPerChipPerFitFirst[0][1]."+x+")>1E-10 && nHitsPerChipValid[0]>20 && nHitsPerChipValid[1]>20");
-		combineHistogramsFromTree(*tree, { "meanDiffPerChipPerFitLast[1][0]."+x,	"meanDiffPerChipPerFitFirst[1][0]."+x},
-				"fabs(meanDiffPerChipPerFitLast[1][0]."+x+")>1E-10 && fabs(meanDiffPerChipPerFitFirst[1][0]."+x+")>1E-10 && nHitsPerChipValid[0]>20 && nHitsPerChipValid[1]>20");
-
-		combineHistogramsFromTree(*tree, { "meanDiffPerChipPerFitLast[3][2]."+x,	"meanDiffPerChipPerFitFirst[3][2]."+x},
-				"fabs(meanDiffPerChipPerFitLast[3][2]."+x+")>1E-10 && fabs(meanDiffPerChipPerFitFirst[3][2]."+x+")>1E-10 && nHitsPerChipValid[2]>20 && nHitsPerChipValid[3]>20");
-		combineHistogramsFromTree(*tree, { "meanDiffPerChipPerFitLast[2][3]."+x,	"meanDiffPerChipPerFitFirst[2][3]."+x},
-				"fabs(meanDiffPerChipPerFitLast[2][3]."+x+")>1E-10 && fabs(meanDiffPerChipPerFitFirst[2][3]."+x+")>1E-10 && nHitsPerChipValid[2]>20 && nHitsPerChipValid[3]>20");
+		try{
+		combineHistogramsFromTree(*tree, { "meanDiffPerChipPerFitLast[0][1]."+x,	"meanDiffPerChipPerFitFirst[0][1]."+x, "meanDiffPerChip[0]."+x},
+				"fabs(meanDiffPerChipPerFitLast[0][1]."+x+")>1E-10 && fabs(meanDiffPerChipPerFitFirst[0][1]."+x+")>1E-10 && nHitsPerChipValid[0]>20 && nHitsPerChipValid[1]>20",
+				"goff",
+				{x+"fitLast[0][1](100,-0.3,0.3)", x+"fitFirst[0][1](100,-0.3,0.3)", "telescopeFit(100,-0.3,0.3)"} )->Print((x+"partialfit.pdf(").c_str());
+		combineHistogramsFromTree(*tree, { "meanDiffPerChipPerFitLast[1][0]."+x,	"meanDiffPerChipPerFitFirst[1][0]."+x, "meanDiffPerChip[1]."+x},
+				"fabs(meanDiffPerChipPerFitLast[1][0]."+x+")>1E-10 && fabs(meanDiffPerChipPerFitFirst[1][0]."+x+")>1E-10 && nHitsPerChipValid[0]>20 && nHitsPerChipValid[1]>20",
+				"goff",
+				{x+"fitLast[1][0](100,-0.3,0.3)", x+"fitFirst[1][0](100,-0.3,0.3)", "telescopeFit(100,-0.3,0.3)"} )->Print((x+"partialfit.pdf").c_str());
+		} catch(...) {};
+		try{
+		combineHistogramsFromTree(*tree, { "meanDiffPerChipPerFitLast[3][2]."+x,	"meanDiffPerChipPerFitFirst[3][2]."+x, "meanDiffPerChip[3]."+x},
+				"fabs(meanDiffPerChipPerFitLast[3][2]."+x+")>1E-10 && fabs(meanDiffPerChipPerFitFirst[3][2]."+x+")>1E-10 && nHitsPerChipValid[2]>20 && nHitsPerChipValid[3]>20",
+				"goff",
+				{x+"fitLast[3][2](100,-0.3,0.3)", x+"fitFirst[3][2](100,-0.3,0.3)", "telescopeFit(100,-0.3,0.3)"} )->Print((x+"partialfit.pdf").c_str());
+		combineHistogramsFromTree(*tree, { "meanDiffPerChipPerFitLast[2][3]."+x,	"meanDiffPerChipPerFitFirst[2][3]."+x, "meanDiffPerChip[2]."+x},
+				"fabs(meanDiffPerChipPerFitLast[2][3]."+x+")>1E-10 && fabs(meanDiffPerChipPerFitFirst[2][3]."+x+")>1E-10 && nHitsPerChipValid[2]>20 && nHitsPerChipValid[3]>20",
+				"goff",
+				{x+"fitLast[2][3](100,-0.3,0.3)", x+"fitFirst[2][3](100,-0.3,0.3)", "telescopeFit(100,-0.3,0.3)"} )->Print((x+"partialfit.pdf)").c_str());
+		} catch(...) {};
 	}
 
 }
@@ -1202,6 +1388,14 @@ TProfile2D* drawPixelzCorrectionModulus(std::string filename="combinedFit.root")
 	return modulus;
 }
 
+void compareOutOfSyncBackground() {
+	CombineHistogramsFromFiles("eventCuts/selectedHitAverageToTrackx",
+			{"combinedFit_fiducial1M.root","combinedFit_outOfSync1M.root"},
+			{"Selected tracks (offset=0)", "Telescope delayed (offset=100 frames)"},
+			[](HistogramCombiner &c){
+				c.setNcolumn(1);
+				c.setLogY();
+			});
 
-
+}
 

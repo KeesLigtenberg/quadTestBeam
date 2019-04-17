@@ -17,7 +17,7 @@ else
 echo "doing alignment" > doCombine.out
 root -b >> doCombine.out <<EOF
 .L ../TrackCombiner/combineTracks.h+
-combineTracksAndUpdateAlignment("`ls run???_events.root`", "`ls 201810*_M26_TELESCOPE_combined.root`")
+combineTracksAndUpdateAlignment("`ls run???_events.root`", "`ls 201810*_M26_TELESCOPE_combined.root`",5)
 EOF
 fi
 

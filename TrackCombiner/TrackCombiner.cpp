@@ -86,6 +86,10 @@ void TrackCombiner::openFile(std::string outputFileName) {
 		outputTree->Branch("meanDiffPerChip", "std::vector<Vec3>", &currentEntry.meanDiffPerChip);
 		outputTree->Branch("meanDiffPerChipPerFitFirst", "std::vector<std::vector<Vec3>>", &currentEntry.meanDiffPerChipPerFitFirst);
 		outputTree->Branch("meanDiffPerChipPerFitLast", "std::vector<std::vector<Vec3>>", &currentEntry.meanDiffPerChipPerFitLast);
+		outputTree->Branch("centerDiffPerChipFit", "Vec3", &currentEntry.centerDiffPerChipFit);
+		outputTree->Branch("centerErrorPerChipFit", "Vec3", &currentEntry.centerErrorPerChipFit);
+		outputTree->Branch("meanErrorPerChipPerFitFirst", "std::vector<std::vector<Vec3>>", &currentEntry.meanErrorPerChipPerFitFirst);
+		outputTree->Branch("meanErrorPerChipPerFitLast", "std::vector<std::vector<Vec3>>", &currentEntry.meanErrorPerChipPerFitLast);
 		outputTree->Branch("meanQuadError", "Vec3", &currentEntry.meanQuadError);
 		outputTree->Branch("meanErrorPerChip", "std::vector<Vec3>", &currentEntry.meanErrorPerChip);
 		outputTree->Branch("nHitsPerChip", "std::vector<int>", &currentEntry.nHitsPerChip);
@@ -173,7 +177,7 @@ void TrackCombiner::Process() {
  		for(auto&f : telescopeFits) {
 
  			//fiducial region
- 			const bool useFiducialExpected=false;
+ 			const bool useFiducialExpected=true;
  			if(useFiducialExpected) {
 				Vec3 expectedAtQuad{ f.xAt(193), 193, f.yAt(193) };
 				auto localExpectedAtQuad=alignment.quad.rotateAndShiftBack(expectedAtQuad);
@@ -232,13 +236,17 @@ void TrackCombiner::Process() {
 				auto avPosition =getWeightedAveragePosition(quadHitsWithResidual, [](const PositionHit& h){return h.isValid();}); //reject all flagged
 				double averageDistx=avPosition.x() - f.xAt(avPosition.y()) ;
 				double averageDistz=avPosition.z() - f.yAt(avPosition.y()) ;
-				selectedHitAverageToTrackx->Fill(averageDistx);
 				selectedHitAverageToTrackz->Fill(averageDistz);
 
 				//first occurence (shift) and average shift
 				if(drawEvent) std::cout<<"dist "<<averageDistx<<", "<<averageDistz<<" frac "<<fraction<<"\n";
-				if ( std::fabs(averageDistx) > 0.3 || std::fabs(averageDistz) > 0.3 || fraction<0.8 ) {
-					if(drawEvent) std::cout<<"More than 20 hits along track, but average position did not match or fraction to low!\n";
+				if ( std::fabs(averageDistz) > 0.3 || fraction<0.8 ) {
+					if(drawEvent) std::cout<<"More than 20 hits along track, but average z position did not match or fraction to low!\n";
+					continue;
+				}
+				selectedHitAverageToTrackx->Fill(averageDistx);
+				if ( std::fabs(averageDistx) > 0.3 ) {
+					if(drawEvent) std::cout<<"More than 20 hits along track, but average x position did not match!\n";
 					continue;
 				}
 
@@ -333,44 +341,6 @@ void TrackCombiner::Process() {
 		}
 		quadHist->fillEvent();
 
-		if(drawEvent && matched) {
-			//		SimpleDetectorConfiguration setupForDrawing { 0,30 /*x*/, 0,42 /*y beam*/, -20,20/*z drift*/};
-			auto setupForDrawing=simpleDetectorFromChipCorners(alignment.getAllChipCorners());
-			setupForDrawing.minz=-10, setupForDrawing.maxz=30;
-			//		SimpleDetectorConfiguration setupForDrawing { 10,40 /*x*/, 0,400 /*y beam*/, 0,40/*z drift*/};
-
-//			std::cout<<"draw telescope hits\n";
-//			telescopeFitter.drawEvent(telescopeHits,telescopeFits);
-	//		HoughTransformer::drawClusters(telescopeHits, setupForDrawing);
-
-			std::cout<<"draw "<< (matched?"matched":"") <<" quad hits "<<quadHits.size()<<"\n";
-
-			//3D
-			const bool draw3D=true;
-			if(draw3D) {
-				HoughTransformer::drawCluster(quadHits,setupForDrawing);
-				for (auto& f : telescopeFits)
-					f.draw( setupForDrawing.ymin(), setupForDrawing.ymax() );
-				for (auto& f : timepixFits)
-					f.draw( setupForDrawing.ymin(), setupForDrawing.ymax(), kTeal );
-				drawQuadOutline(alignment, setupForDrawing.zmax() );
-				gPad->Update();
-			}
-			const bool draw2D=true;
-			if(draw2D){
-				//2D
-				drawCluster2D(quadHits,setupForDrawing);
-				alignment.drawChipEdges();
-				for (auto& f : telescopeFits)
-					f.XZ.draw( setupForDrawing.ymin(), setupForDrawing.ymax() );
-				for (auto& f : timepixFits)
-					f.XZ.draw( setupForDrawing.ymin(), setupForDrawing.ymax(), kTeal );
-				gPad->Update();
-			}
-
-			gPad->Update();
-			if(processDrawSignals()) break;
-		}
 
 		if(outputTree and matched) {
 			//make timepix fit per chip
@@ -407,25 +377,56 @@ void TrackCombiner::Process() {
 			currentEntry.meanPositionPerChip=getWeightedAveragePositionPerChip(quadHits);
 			currentEntry.meanQuadDiff.x=matched ? (currentEntry.meanQuadPosition.x - fittedTrack->xAt(currentEntry.meanQuadPosition.y)) : 0;
 			currentEntry.meanQuadDiff.z=matched ? (currentEntry.meanQuadPosition.z - fittedTrack->yAt(currentEntry.meanQuadPosition.y)) : 0;
-			currentEntry.meanQuadError.x=matched ? (timepixTrack.XZ.errorAt(currentEntry.meanQuadPosition.y)) : 0;
-			currentEntry.meanQuadError.z=matched ? (timepixTrack.YZ.errorAt(currentEntry.meanQuadPosition.y)) : 0;
+			currentEntry.meanQuadError.x=matched ? hypot(timepixTrack.XZ.errorAt(currentEntry.meanQuadPosition.y), fittedTrack->XZ.errorAt(currentEntry.meanQuadPosition.y)) : 0;
+			currentEntry.meanQuadError.z=matched ? hypot(timepixTrack.YZ.errorAt(currentEntry.meanQuadPosition.y), fittedTrack->YZ.errorAt(currentEntry.meanQuadPosition.y)) : 0;
 			currentEntry.meanDiffPerChip=std::vector<Vec3>(4);
 			currentEntry.meanErrorPerChip=std::vector<Vec3>(4);
 			currentEntry.meanDiffPerChipPerFitFirst=std::vector<std::vector<Vec3>>{4,std::vector<Vec3>{4}};
 			currentEntry.meanDiffPerChipPerFitLast=std::vector<std::vector<Vec3>>{4,std::vector<Vec3>{4}};
-			for(int i=0; i<4; i++) {
+			currentEntry.meanErrorPerChipPerFitFirst=std::vector<std::vector<Vec3>>{4,std::vector<Vec3>{4}};
+			currentEntry.meanErrorPerChipPerFitLast=std::vector<std::vector<Vec3>>{4,std::vector<Vec3>{4}};
+			for(int i=0; i<4; i++) { //chip with position
 				currentEntry.meanDiffPerChip[i].x =	matched ? (currentEntry.meanPositionPerChip[i].x - fittedTrack->xAt(currentEntry.meanPositionPerChip[i].y) ) : 0;
 				currentEntry.meanDiffPerChip[i].z =	matched ? (currentEntry.meanPositionPerChip[i].z - fittedTrack->yAt(currentEntry.meanPositionPerChip[i].y) ) : 0;
-				currentEntry.meanErrorPerChip[i].x = matched && fitsPerChip[i] ? (fitsPerChip[i]->XZ.errorAt(currentEntry.meanPositionPerChip[i].y)) : 0;
-				currentEntry.meanErrorPerChip[i].z = matched && fitsPerChip[i] ? (fitsPerChip[i]->YZ.errorAt(currentEntry.meanPositionPerChip[i].y)) : 0;
-				for(int j=0; j<4; j++) {
+				currentEntry.meanErrorPerChip[i].x = matched && fitsPerChip[i] ? hypot(fitsPerChip[i]->XZ.errorAt(currentEntry.meanPositionPerChip[i].y),fittedTrack->XZ.errorAt(currentEntry.meanPositionPerChip[i].y) ) : 0;
+				currentEntry.meanErrorPerChip[i].z = matched && fitsPerChip[i] ? hypot(fitsPerChip[i]->YZ.errorAt(currentEntry.meanPositionPerChip[i].y),fittedTrack->YZ.errorAt(currentEntry.meanPositionPerChip[i].y)) : 0;
+				for(int j=0; j<4; j++) { //chip with fit
 					currentEntry.meanDiffPerChipPerFitFirst[i][j].x=fitsPerChipWithFirstPlanes[j] ? (currentEntry.meanPositionPerChip[i].x - fitsPerChipWithFirstPlanes[j]->xAt(currentEntry.meanPositionPerChip[i].y) ) : 0;
 					currentEntry.meanDiffPerChipPerFitFirst[i][j].z=fitsPerChipWithFirstPlanes[j] ? (currentEntry.meanPositionPerChip[i].z - fitsPerChipWithFirstPlanes[j]->yAt(currentEntry.meanPositionPerChip[i].y) ) : 0;
 
 					currentEntry.meanDiffPerChipPerFitLast[i][j].x=fitsPerChipWithLastPlanes[j] ? (currentEntry.meanPositionPerChip[i].x - fitsPerChipWithLastPlanes[j]->xAt(currentEntry.meanPositionPerChip[i].y) ) : 0;
 					currentEntry.meanDiffPerChipPerFitLast[i][j].z=fitsPerChipWithLastPlanes[j] ? (currentEntry.meanPositionPerChip[i].z - fitsPerChipWithLastPlanes[j]->yAt(currentEntry.meanPositionPerChip[i].y) ) : 0;
+
+					currentEntry.meanErrorPerChipPerFitFirst[i][j].x=fitsPerChipWithFirstPlanes[j] ?
+							hypot(fitsPerChipWithFirstPlanes[j]->XZ.errorAt(currentEntry.meanPositionPerChip[i].y),fittedTrack->XZ.errorAt(currentEntry.meanPositionPerChip[i].y)  ) : 0;
+					currentEntry.meanErrorPerChipPerFitFirst[i][j].z=fitsPerChipWithFirstPlanes[j] ?
+							hypot(fitsPerChipWithFirstPlanes[j]->YZ.errorAt(currentEntry.meanPositionPerChip[i].y),fittedTrack->YZ.errorAt(currentEntry.meanPositionPerChip[i].y) ) : 0;
+
+					currentEntry.meanErrorPerChipPerFitLast[i][j].x=fitsPerChipWithLastPlanes[j] ?
+							hypot(fitsPerChipWithLastPlanes[j]->XZ.errorAt(currentEntry.meanPositionPerChip[i].y),fittedTrack->XZ.errorAt(currentEntry.meanPositionPerChip[i].y) ) : 0;
+					currentEntry.meanErrorPerChipPerFitLast[i][j].z=fitsPerChipWithLastPlanes[j] ?
+							hypot(fitsPerChipWithLastPlanes[j]->YZ.errorAt(currentEntry.meanPositionPerChip[i].y),fittedTrack->YZ.errorAt(currentEntry.meanPositionPerChip[i].y) ) : 0;
+
 				}
 			}
+			auto quadCenter=alignment.quad.getShiftedCOM().y();
+			if(fitsPerChip[0] && fitsPerChip[1]) {
+				currentEntry.centerDiffPerChipFit.x = fitsPerChipWithFirstPlanes[1]->xAt(quadCenter) - fitsPerChipWithLastPlanes[0]->xAt(quadCenter);
+				currentEntry.centerDiffPerChipFit.z = fitsPerChipWithFirstPlanes[1]->yAt(quadCenter) - fitsPerChipWithLastPlanes[0]->yAt(quadCenter);
+				currentEntry.centerErrorPerChipFit.x = sqrt( fitsPerChipWithFirstPlanes[1]->XZ.error2At(quadCenter) + fitsPerChipWithLastPlanes[0]->XZ.error2At(quadCenter) );
+				currentEntry.centerErrorPerChipFit.z = sqrt( fitsPerChipWithFirstPlanes[1]->YZ.error2At(quadCenter) + fitsPerChipWithLastPlanes[0]->YZ.error2At(quadCenter) );
+			} else if(fitsPerChip[2] && fitsPerChip[3]) {
+				currentEntry.centerDiffPerChipFit.x = fitsPerChipWithFirstPlanes[2]->xAt(quadCenter) - fitsPerChipWithLastPlanes[3]->xAt(quadCenter);
+				currentEntry.centerDiffPerChipFit.z = fitsPerChipWithFirstPlanes[2]->yAt(quadCenter) - fitsPerChipWithLastPlanes[3]->yAt(quadCenter);
+				currentEntry.centerErrorPerChipFit.x = sqrt( fitsPerChipWithFirstPlanes[2]->XZ.error2At(quadCenter) + fitsPerChipWithLastPlanes[3]->XZ.error2At(quadCenter) );
+				currentEntry.centerErrorPerChipFit.z = sqrt( fitsPerChipWithFirstPlanes[2]->YZ.error2At(quadCenter) + fitsPerChipWithLastPlanes[3]->YZ.error2At(quadCenter) );
+			} else {
+				currentEntry.centerDiffPerChipFit.x = 0;
+				currentEntry.centerDiffPerChipFit.z = 0;
+				currentEntry.centerErrorPerChipFit.x = 0;
+				currentEntry.centerErrorPerChipFit.z = 0;
+			}
+
 			currentEntry.nHitsPerChip=nHitsPerChip;
 			currentEntry.nHitsPerChipValid=countHitsPerChip(quadHits,true);
 			//currentEntry.quadHits=quadHits;
@@ -435,6 +436,46 @@ void TrackCombiner::Process() {
 			currentEntry.triggerToA=quadFitter.reader.triggerToA;
 
 			outputTree->Fill();
+		}
+
+
+		if(drawEvent && matched) {
+			//		SimpleDetectorConfiguration setupForDrawing { 0,30 /*x*/, 0,42 /*y beam*/, -20,20/*z drift*/};
+			auto setupForDrawing=simpleDetectorFromChipCorners(alignment.getAllChipCorners());
+			setupForDrawing.minz=-10, setupForDrawing.maxz=30;
+			//		SimpleDetectorConfiguration setupForDrawing { 10,40 /*x*/, 0,400 /*y beam*/, 0,40/*z drift*/};
+
+//			std::cout<<"draw telescope hits\n";
+//			telescopeFitter.drawEvent(telescopeHits,telescopeFits);
+	//		HoughTransformer::drawClusters(telescopeHits, setupForDrawing);
+
+			std::cout<<"draw "<< (matched?"matched":"") <<" quad hits (selected) "<<quadHits.size()<<" ("<<countTotalValidHits(quadHits)<<")\n";
+
+			//3D
+			const bool draw3D=true;
+			if(draw3D) {
+				HoughTransformer::drawCluster(quadHits,setupForDrawing);
+				for (auto& f : telescopeFits)
+					f.draw( setupForDrawing.ymin(), setupForDrawing.ymax() );
+				for (auto& f : timepixFits)
+					f.draw( setupForDrawing.ymin(), setupForDrawing.ymax(), kTeal );
+				drawQuadOutline(alignment, setupForDrawing.zmax() );
+				gPad->Update();
+			}
+			const bool draw2D=true;
+			if(draw2D){
+				//2D
+				drawCluster2D(quadHits,setupForDrawing);
+				alignment.drawChipEdges();
+				for (auto& f : telescopeFits)
+					f.XZ.draw( setupForDrawing.ymin(), setupForDrawing.ymax() );
+				for (auto& f : timepixFits)
+					f.XZ.draw( setupForDrawing.ymin(), setupForDrawing.ymax(), kTeal );
+				gPad->Update();
+			}
+
+			gPad->Update();
+			if(processDrawSignals()) break;
 		}
 
 	}

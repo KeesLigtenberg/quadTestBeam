@@ -59,8 +59,10 @@ public:
 	bool recalculateCOM=true; //centre of mass
 	bool constructLineParallelToZ=false;
 	bool doBinnedClustering=false;
+	bool doPartialFits=false;
 
 	double maxResidual=0.2;
+	int nMinPlanesHit=5;
 
 	std::function<bool(const PositionHit&)> selectHitForRefit = [](const PositionHit&){return true;}; //select all hits by default
 

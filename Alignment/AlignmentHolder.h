@@ -256,7 +256,7 @@ void ShiftAndRotateAlignment::updateShift(TFile& file,const std::string& histNam
 			std::cout << "skipped " << histName << " because less than " << minEntries
 					<< " in histogram\n";
 		} else {
-			const double learningRate=1;
+			const double learningRate=0.5;
 			double mean = learningRate*hist->GetMean(); //getMeanFromGausCoreFit(*hist);
 			shift[i] -= mean;
 			std::cout << "update " << histName << " by " << mean << "\n";

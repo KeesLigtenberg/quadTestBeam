@@ -243,9 +243,9 @@ void ChipHistogrammer::residualHistograms::createHistograms(const PositionRange&
 	positionHitMap=unique_ptr<TH2D>(new TH2D{ ("positionHitMap"), "Hitmap with positions;x-position [mm];y-position [mm]",
 		int((xmax-xmin)/.055),xmin,xmax,int((ymax-ymin)/.055),ymin, ymax});
 
-	xResidualByPosition=std::unique_ptr<TProfile2D>(new TProfile2D{ ("xResidualByPosition"), "mean x-residual by position;x [mm]; y[mm]; mean x-residual [mm]",
+	xResidualByPosition=std::unique_ptr<TProfile2D>(new TProfile2D{ ("xResidualByPosition"), "mean x-residual by position;x-position [mm]; y-position [mm]; mean x-residual [mm]",
 		int((xmax-xmin)/.055),xmin,xmax,int((ymax-ymin)/.055),ymin, ymax});
-	zResidualByPosition=std::unique_ptr<TProfile2D>(new TProfile2D{ ("zResidualByPosition"), "mean z-residual by position;x [mm]; y[mm]; mean z-residual [mm]",
+	zResidualByPosition=std::unique_ptr<TProfile2D>(new TProfile2D{ ("zResidualByPosition"), "mean z-residual by position;x-position [mm]; y-position [mm]; mean z-residual [mm]",
 		int((xmax-xmin)/.055),xmin,xmax,int((ymax-ymin)/.055),ymin, ymax});
 	for(auto prof2d : {&xResidualByPosition, &zResidualByPosition} ) {
 		(*prof2d)->SetMinimum(-0.1), (*prof2d)->SetMaximum(0.1);
@@ -257,9 +257,9 @@ void ChipHistogrammer::residualHistograms::createHistograms(const PositionRange&
 			int((xmax-xmin)/.055),xmin,xmax,int((ymax-ymin)/.055),ymin, ymax} );
 	}
 
-	xResidualByXZ=std::unique_ptr<TProfile2D>(new TProfile2D{ ("xResidualByXZ"), "mean x-residual by XZ;x [mm]; y[mm]; mean x-residual [mm]",
+	xResidualByXZ=std::unique_ptr<TProfile2D>(new TProfile2D{ ("xResidualByXZ"), "mean x-residual by XZ;x-position [mm]; y-position [mm]; mean x-residual [mm]",
 		int((xmax-xmin)/.055),xmin,xmax,100,zmin, zmax});
-	zResidualByXZ=std::unique_ptr<TProfile2D>(new TProfile2D{ ("zResidualByXZ"), "mean z-residual by XZ;x [mm]; y[mm]; mean z-residual [mm]",
+	zResidualByXZ=std::unique_ptr<TProfile2D>(new TProfile2D{ ("zResidualByXZ"), "mean z-residual by XZ;x-position [mm]; y-position [mm]; mean z-residual [mm]",
 		int((xmax-xmin)/.055),xmin,xmax,100,zmin, zmax});
 	for(auto prof2d : {&xResidualByXZ, &zResidualByXZ} ) {
 		(*prof2d)->SetMinimum(-0.2), (*prof2d)->SetMaximum(0.2);

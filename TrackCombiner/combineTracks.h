@@ -29,7 +29,7 @@ void updateAlignmentFromFile(std::string resultFile="combinedFit.root", std::str
 	TFile file(resultFile.c_str(), "READ");
 //		alignment.updateAll(file);
 //	alignment.updateShifts(file);
-		alignment.quad.updateShift(file,"quad/global");
+//		alignment.quad.updateShift(file,"quad/global");
 //	alignment.updateRotations(file);
 		alignment.quad.updateRotation(file,"quad");
 //		alignment.updateTimeWalk(file);
