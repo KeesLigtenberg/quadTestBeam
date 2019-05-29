@@ -52,6 +52,14 @@ const std::vector<std::vector<double>> deformationCorrectionParameters{
 	{4.19523, 14.0504, 2.02393, -2.35141, 14.9244, 2.3167, 1.72633, 27.3346, 1.94821, -3.01411, 28.2367, 1.71122, 0.00287906},
 	{6.24837, 13.7489, 2.48634, -2.89738, 15.1342, 2.68989, 1.65655, 27.4766, 2.02193, -3.22435, 28.5387, 1.84855, 0.00445736}};
 
+const std::vector<std::vector<double>> deformationCorrectionParameters2D {
+	/*from slices, not fitted:*/{0.607265, 0.601361, 1.23181, -0.475022, 1.06917, 1.47417, 0.583238, 13.0829, 1.86374, -2.2265, 14.647, 1.66712, -0.126286, -0.63831, -0.783439, -0.483713, -0.0158162, -0.125154, -0.183763, -0.0999177, -0.000220556, -0.00925859, -0.0165204, -0.00759287, 6.80086e-06, -0.000272101, -0.000524304, -0.000190968, 0},
+	/*from slices, not fitted:*/{-82.5654, 0.214669, 2.19138, 69.5606, 0.886239, 1.99129, -29.0872, 13.038, 1.86158, 56.253, 14.5125, 1.42046, -0.236313, -0.236195, -0.234543, -0.226445, 0.0198142, 0.0199607, 0.0197994, 0.018154, -0.000726339, -0.000739737, -0.000733769, -0.000636852, 9.85221e-06, 1.01743e-05, 1.00671e-05, 8.22407e-06, 0},
+	/*from slices, not fitted:*/{45.921, 13.8681, 1.62227, -1.34683, 15.1036, 2.13422, -81.6226, 27.3975, 1.57415, 60.67, 27.5676, 1.53325, -0.242503, -0.337041, -0.225022, -0.217407, 0.0224487, 0.050721, 0.0181244, 0.0166963, -0.000890297, -0.00249817, -0.000643314, -0.000564254, 1.2862e-05, 4.02697e-05, 8.52359e-06, 7.12508e-06, 0},
+	/*from slices, not fitted:*/{1.53934, 13.9714, 1.53128, -0.720504, 15.1646, 2.25554, 0.625633, 27.3682, 1.69424, -0.775162, 28.4275, 1.44918, -0.544092, -0.750567, -0.336008, -0.777051, -0.122131, -0.171774, -0.0793567, -0.177514, -0.0114143, -0.0160671, -0.00792585, -0.0172138, -0.000354717, -0.000512559, -0.000276622, -0.000574449, 0}
+};
+
+
 
 double deformationCorrection(int ichip, double x, const std::vector<std::vector<double>>& p=deformationCorrectionParameters) {
 	static auto correction=new TF1("correction",
@@ -62,8 +70,8 @@ double deformationCorrection(int ichip, double x, const std::vector<std::vector<
 	return correction->Eval(x);
 }
 
-double deformationCorrection2D(int ichip, double x, double y, const std::vector<std::vector<double>>& p=deformationCorrectionParameters) {
-	auto correction=new TF2("correction",
+double deformationCorrection2D(int ichip, double x, double y, const std::vector<std::vector<double>>& p=deformationCorrectionParameters2D) {
+	static auto correction=new TF2("correction",
 			"(1+[b0]*y+[c0]*y*y+[d0]*y*y*y+[e0]*y*y*y*y)*breitwigner(0)+(1+[b1]*y+[c1]*y*y+[d1]*y*y*y+[e1]*y*y*y*y)*breitwigner(3) "
 			"+"
 			"(1+[b2]*y+[c2]*y*y+[d2]*y*y*y+[e2]*y*y*y*y)*breitwigner(6)+(1+[b3]*y+[c3]*y*y+[d3]*y*y*y+[e3]*y*y*y*y)*breitwigner(9)+[offset]");

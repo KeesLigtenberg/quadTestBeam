@@ -10,6 +10,7 @@
 
 #include "../TelescopeTrackFitter/TelescopeTrackFitter.cpp"
 #include "../TrackFitter/QuadTrackFitter.cpp"
+#include "EntryBuffer.h"
 
 
 class TrackCombiner {
@@ -54,7 +55,7 @@ private:
 		unsigned telescopeTime;
 	} currentEntry;
 
-//	const int triggerOffset=100;//WARNING OUT OF SYNC!!!
+//	const int triggerOffset=1000;//WARNING OUT OF SYNC!!!
 	const int triggerOffset=0;
 	int nTelescopeTriggers=0;
 	int previousTriggerNumberBegin=0, previousTriggerNumberEnd=0;
@@ -65,6 +66,41 @@ private:
 	TrackCombiner::MatchResult getAndMatchEntries(
 			int& telescopeEntry,
 			int& tpcStartEntry);
+
+
+
+
+	//for making cut flow:
+	struct StatusKeeper{
+		StatusKeeper(std::string name) : statusHistogram( new TH1D( (name+"Status").c_str(), ("status of "+name).c_str(), 1,0,1) ) {};
+		StatusKeeper(std::shared_ptr<TH1D> h) : statusHistogram(h) {};
+		StatusKeeper(const TrackCombiner::StatusKeeper& o) : statusHistogram(o.statusHistogram) {};
+		virtual ~StatusKeeper() {};
+		int priority=0; std::string message="";
+		void replace(int messagePriority, std::string newMessage) {
+			if(messagePriority>priority) { message=newMessage; priority=messagePriority;}
+		}
+		void reset() {
+			if(priority) statusHistogram->Fill(message.c_str(),1);
+			priority=0;
+		}
+		void Write() { statusHistogram->LabelsDeflate(); statusHistogram->Write(); };
+		std::shared_ptr<TH1D> statusHistogram;
+	};
+	const bool keepStatus=false;
+	std::unique_ptr<StatusKeeper> frameStatusHistogram{}, triggerStatusHistogram{}, timepixStatusHistogram{};
+	EntryBuffer<int, StatusKeeper> timepixStatusKeepers; //special buffered statusKeeper function
+
+	//one function to fill all statushistograms at once.
+	void replaceStatus(int priority, std::string message, int tpcEntryNumber) {
+		if(not keepStatus) return;
+		for(auto* s : {&frameStatusHistogram, &triggerStatusHistogram} ) (*s)->replace(priority, message);
+		if(!timepixStatusKeepers.isInBuffer(tpcEntryNumber)) {
+			timepixStatusKeepers.placeInBuffer(tpcEntryNumber, *timepixStatusHistogram);
+		}
+		timepixStatusKeepers.getFromBuffer(tpcEntryNumber).replace(priority, message);
+	}
+
 
 };
 

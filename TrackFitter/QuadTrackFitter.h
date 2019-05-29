@@ -68,6 +68,7 @@ public:
 	std::vector<PositionHit> posHits;
 
 	unsigned triggerNumber() { return (reader.triggerNumber); }
+	Long64_t numberOfEntries() { return reader.tree->GetEntries(); }
 
 
 	std::vector<PositionHit> getSpaceHits(const Alignment& alignment);

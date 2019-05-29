@@ -5,6 +5,9 @@
 #include "../eventBuilder/Hit.h"
 
 #include <algorithm>
+#include <functional>
+#include <set>
+#include <memory>
 
 #include "TVector3.h"
 

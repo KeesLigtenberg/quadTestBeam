@@ -33,6 +33,8 @@ public:
 
 	int makeMask(double ntimesThreshold=1e4);
 	void fitTracks( std::string outputfilename );
+
+	std::vector<std::pair<FitResult3D,FitResult3D> > partialFits{};
 	std::vector<FitResult3D> getFits(std::vector<std::vector<PositionHit> >& spaceHit); //helper function for trackCombiner
 
 	std::vector<std::pair<double,double>> getMeanResiduals(); //not constant because adds fits!

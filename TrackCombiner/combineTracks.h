@@ -16,9 +16,6 @@ void combineTracks(std::string quad, std::string mimosa, bool draw=false) {
 	tc.drawEvent=draw;
 
 	tc.telescopeFitter.getEntry(10);
-	auto hits=tc.telescopeFitter.getSpaceHits();
-
-	if(hits.size() ) for(auto& h : hits[0]) std::cout<<h.ToT;
 
 	tc.openFile(draw ? "tmp.root" : "combinedFit.root");
 	tc.Process();
@@ -29,9 +26,10 @@ void updateAlignmentFromFile(std::string resultFile="combinedFit.root", std::str
 	TFile file(resultFile.c_str(), "READ");
 //		alignment.updateAll(file);
 //	alignment.updateShifts(file);
-//		alignment.quad.updateShift(file,"quad/global");
+//	alignment.updateShears(file);
+		alignment.quad.updateShift(file,"quad/global");
 //	alignment.updateRotations(file);
-		alignment.quad.updateRotation(file,"quad");
+//		alignment.quad.updateRotation(file,"quad");
 //		alignment.updateTimeWalk(file);
 //		alignment.updateDriftSpeed(file);
 		alignment.write("align.dat");

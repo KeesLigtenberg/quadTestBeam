@@ -123,7 +123,7 @@ std::vector<std::vector<PositionHit> > TelescopeTrackFitter::getSpaceHits() {
 	spaceHit=rotateAndShift(spaceHit);
 
 	//set errors
-	for(auto& hv: spaceHit) for(auto& h : hv) h.error=TVector3(detector.pixelsize,detector.pixelsize,1);
+	for(auto& hv: spaceHit) for(auto& h : hv) h.error=TVector3(detector.pixelsize/sqrt(12),detector.pixelsize/sqrt(12),1);
 
 	return spaceHit;
 }
@@ -189,7 +189,7 @@ void TelescopeTrackFitter::fitTracks(std::string outputfilename) {
 
 	//loop over all entries
 	long int nPassed=0,nClusters=0;
-	for( int iEvent=0; iEvent<2E5 //nEvents
+	for( int iEvent=0; iEvent<5E5 //nEvents
 	; iEvent++ ) {
 
 		if(!(iEvent%10000))
@@ -353,6 +353,7 @@ void TelescopeTrackFitter::fitTracks(std::string outputfilename) {
 
 std::vector<FitResult3D> TelescopeTrackFitter::getFits(std::vector<std::vector<PositionHit> >& spaceHit) {
 	std::vector<FitResult3D> fits;
+	partialFits.clear();
 
 	//check event
 	if( !passEvent(spaceHit) ) return fits;
@@ -395,19 +396,18 @@ std::vector<FitResult3D> TelescopeTrackFitter::getFits(std::vector<std::vector<P
 
 		if(!fit.isValid()) {cerr<<"fit not valid!"<<endl; continue;	}
 
-		{ //extra cut on scatter difference between first and last plane
-			HoughTransformer::HitCluster hitsFirstThree, hitsSecondThree;
-			std::copy_if(selectedHits.begin(), selectedHits.end(), std::back_inserter(hitsFirstThree), [](const PositionHit& h){ return h.chip<=2;} );
-			std::copy_if(selectedHits.begin(), selectedHits.end(), std::back_inserter(hitsSecondThree), [](const PositionHit& h){ return h.chip>=3; } );
-			if(hitsFirstThree.recalculateNPlanesHit()<=1 or hitsSecondThree.recalculateNPlanesHit()<=1) continue;
-			auto fitFirst=regressionFit3d(hitsFirstThree);
-			auto fitSecond=regressionFit3d(hitsSecondThree);
-			if( fabs(fitFirst.XZ.slope-fitSecond.XZ.slope) > 1E-3 or fabs(fitFirst.YZ.slope-fitSecond.YZ.slope) > 1E-3 ) continue;
-		}
-
+		//extra cut on scatter difference between first and last plane
+		HoughTransformer::HitCluster hitsFirstThree, hitsSecondThree;
+		std::copy_if(selectedHits.begin(), selectedHits.end(), std::back_inserter(hitsFirstThree), [](const PositionHit& h){ return h.chip<=2;} );
+		std::copy_if(selectedHits.begin(), selectedHits.end(), std::back_inserter(hitsSecondThree), [](const PositionHit& h){ return h.chip>=3; } );
+		if(hitsFirstThree.recalculateNPlanesHit()<=1 or hitsSecondThree.recalculateNPlanesHit()<=1) continue;
+		auto fitFirst=regressionFit3d(hitsFirstThree);
+		auto fitSecond=regressionFit3d(hitsSecondThree);
+		if( fabs(fitFirst.XZ.slope-fitSecond.XZ.slope) > 1E-3 or fabs(fitFirst.YZ.slope-fitSecond.YZ.slope) > 1E-3 ) continue;
 
 		hitCluster=calculateResiduals(hitCluster, fit);
 		fits.push_back(fit);
+		partialFits.push_back( {fitFirst,fitSecond} );
 	}
 
 	return fits;

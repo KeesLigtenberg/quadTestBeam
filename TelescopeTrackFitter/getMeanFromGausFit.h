@@ -19,7 +19,7 @@ inline double getMeanFromSimpleGausFit( TH1& hist ) {
 }
 inline double getParameterFromFit( TH1& hist, TF1& fit, int param) {
 	fit.SetParameters(hist.GetEntries()/hist.GetNbinsX()*5, hist.GetMean(), hist.GetStdDev() ); //estimates with the correct order of magnitude
-	TFitResultPtr fitresult=hist.Fit(&fit, "MSQ"); //More(try to find more than one minimum), Store and Quiet
+	TFitResultPtr fitresult=hist.Fit(&fit, "MSQR"); //More(try to find more than one minimum), Store and Quiet, Range
 	if(!fitresult->IsValid()) {
 		std::cerr<< "getParameterFromFit error: failed to fit histogram "<<hist.GetName()<<std::endl;
 		throw int(1);
@@ -41,5 +41,22 @@ inline double getMeanFromGausFit( TH1& hist ) {
 	}
 	return mean;
 }
+
+inline double getMeanFromGausFitAroundMean( TH1& hist ) {
+	TF1 gaus( "myGaus", "[0]*exp(-0.5*((x-[1])/[2])^2)", hist.GetMean()-hist.GetRMS(),  hist.GetMean()+hist.GetRMS());
+	int meanParameterNumber=1;
+	double mean=0;
+	try{
+		mean=getParameterFromFit(hist, gaus, meanParameterNumber);
+	} catch(const int& error ) {
+		if(error==1) {
+//			std::cerr<<"retry with gaus default instead"<<std::endl;
+//			mean=getMeanFromSimpleGausFit(hist);
+			throw error;
+		}
+	}
+	return mean;
+}
+
 
 #endif /* GETMEANFROMGAUSFIT_H_ */

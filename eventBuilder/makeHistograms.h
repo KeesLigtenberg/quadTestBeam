@@ -74,7 +74,9 @@ void makeHistograms(std::string inputFileName, std::string outputFileName) {
 //	std::cout<<"updating offset and bin width..\n";
 //	triggerReader.updateOffsetAndBinWidth(200);
 
-	auto trigger=triggerReader.getNextTriggerForced();
+	const bool readTriggers=false;
+	TriggerTreeReader::Trigger trigger;
+	if(readTriggers) trigger=triggerReader.getNextTriggerForced();
 
 	//move all chips to first trigger entry
 	for(unsigned i=0; i<chips.size(); i++) {
@@ -86,21 +88,23 @@ void makeHistograms(std::string inputFileName, std::string outputFileName) {
 //	startToA+=1E9/25*4096;
 	double previousTrackt=0;
 //	std::cout<<"start is "<<startToA<<"\n";
-	for(auto t=startToA; not chips[0]->reachedEnd() and not triggerReader.reachedEnd(); t+=stepSize) {
+	for(auto t=startToA; not chips[0]->reachedEnd() and (not readTriggers or not triggerReader.reachedEnd() ); t+=stepSize) {
 		if(!(frame%10000)) {
 			std::cout<<"frame "<<frame<<" saved "<<outputTrees.triggerNumber<<"\r"<<std::flush;
 			if(!(frame%1000000)) {  std::cout<<"\nforcing autosave..\n"; outputTrees.tree.AutoSave();}
 		}
 //		if( frame > 10E6  ) break;
-		if(outputTrees.triggerNumber>1E5) break;
+		if(outputTrees.triggerNumber>1E6) break;
 
 		//read triggers
-		while(triggers.size() and triggers.front().toa< t -triggerWindow/2) triggers.pop_front();
-		while (triggers.empty() or trigger.toa<t+triggerWindow/2) {
-			auto previousTrigger=trigger;
-			trigger=triggerReader.getNextTriggerForced();
-			timeBetweenTriggers.Fill( (trigger.toa-previousTrigger.toa)*25E-3/4096 );
-			triggers.push_back(trigger);
+		if(readTriggers) {
+			while(triggers.size() and triggers.front().toa< t -triggerWindow/2) triggers.pop_front();
+			while (triggers.empty() or trigger.toa<t+triggerWindow/2) {
+				auto previousTrigger=trigger;
+				trigger=triggerReader.getNextTriggerForced();
+				timeBetweenTriggers.Fill( (trigger.toa-previousTrigger.toa)*25E-3/4096 );
+				triggers.push_back(trigger);
+			}
 		}
 //		std::cout<<"t="<<t<<" front trigger toa="<<triggers.front().toa<<" added trigger toa="<<trigger.toa<<"\n";
 
@@ -131,7 +135,7 @@ void makeHistograms(std::string inputFileName, std::string outputFileName) {
 //			}
 
 			//TEMPORARELY DISABLE TREE WRITING!!!
-			//outputTrees.fill();
+			outputTrees.fill();
 			outputTrees.triggerNumber++;
 
 //			std::cout<<triggers.size()<<"\n";

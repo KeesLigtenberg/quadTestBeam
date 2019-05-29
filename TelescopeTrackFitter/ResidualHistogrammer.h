@@ -43,9 +43,9 @@ public:
 	struct PlaneHistograms {
 		static int n;
 		PlaneHistograms(const TelescopeConfiguration& det) :
-			xResidual( ("xResidual_"+std::to_string(n)).c_str(), ("xResidual_"+std::to_string(n)).c_str(), 40, -0.2, 0.2),
-			yResidual( ("yResidual_"+std::to_string(n)).c_str(), ("yResidual_"+std::to_string(n)).c_str(), 40, -0.2, 0.2),
-			zRotation( ("zRotation_"+std::to_string(n)).c_str(), ("zRotation_"+std::to_string(n)).c_str(), 40, -0.05, 0.05),
+			xResidual( ("xResidual_"+std::to_string(n)).c_str(), ("xResidual_"+std::to_string(n)).c_str(), 100, -0.1, 0.1),
+			yResidual( ("yResidual_"+std::to_string(n)).c_str(), ("yResidual_"+std::to_string(n)).c_str(), 100, -0.1, 0.1),
+			zRotation( ("zRotation_"+std::to_string(n)).c_str(), ("zRotation_"+std::to_string(n)).c_str(), 100, -0.025, 0.025),
 			xResidualByPixel( ("xResidualByPixel_"+std::to_string(n)).c_str(), ("xResidualByPixel_"+std::to_string(n)).c_str(), 20, det.xmin(), det.xmax(), 20, 0, det.ymax() ),
 			yResidualByPixel( ("yResidualByPixel_"+std::to_string(n)).c_str(), ("yResidualByPixel_"+std::to_string(n)).c_str(), 20, det.xmin(), det.xmax(), 20, 0, det.ymax() ),
 //			xRotation( ("xRotation_"+std::to_string(n)).c_str(), ("xRotation_"+std::to_string(n)).c_str(), 40, -0.05, 0.05),

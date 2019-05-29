@@ -66,6 +66,7 @@ struct Alignment {
 	void updateAll(TFile& ) ;
 	void updateShifts(TFile& file);
 	void updateRotations(TFile& file);
+	void updateShears(TFile& file);
 	void updateDriftSpeed(TFile& file);
 	void updateTimeWalk(TFile& file);
 
@@ -153,6 +154,14 @@ void Alignment::updateRotations(TFile& file) {
 		chips[i].updateRotation(file, "chip" + std::to_string(i));
 	}
 }
+
+void Alignment::updateShears(TFile& file) {
+//	quad.updateRotation(file, "quad");
+	for (int i = 0; i < 4; i++) {
+		chips[i].updateShear(file, "chip" + std::to_string(i));
+	}
+}
+
 
 void Alignment::updateDriftSpeed(TFile& file) {
 	auto slope=getDriftSpeedFactor(file,false);

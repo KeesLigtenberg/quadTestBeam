@@ -123,10 +123,13 @@ struct ChipHistogrammer {
 
 	std::unique_ptr<TH1I> nHits;
 	std::unique_ptr<TH1D> driftTime, ToT, nShiftedTrigger;
+	std::unique_ptr<TH1D> xResidualPull{}, yResidualPull{}, zResidualPull{};
 	std::unique_ptr<TH2D> pixelHitMap;
 	std::unique_ptr<TH1D> xRotation, yRotation, zRotation;
+	std::unique_ptr<TH1D> xzShear; //angle of E field to plane
 
 	std::unique_ptr<TH2D> zResidualByToT, xResidualByToT, zResidualByToTCorrected,zResidualByDriftTime;
+	std::unique_ptr<TH2D> xByzForShear;
 
 	struct residualHistograms {
 		residualHistograms(std::string name) : name{name} {};
@@ -186,17 +189,25 @@ ChipHistogrammer::ChipHistogrammer(std::string name, const Alignment& align) : d
 	ToT=			unique_ptr<TH1D>(new TH1D{"ToT", "Time over threshold;ToT [#mus];Hits",80,0,2});
 	nShiftedTrigger= unique_ptr<TH1D>(new TH1D{"nShiftedTrigger", "nShiftedTrigger;Shifted time [409.6 #mus]; Entries", 500,0,500});
 
+	xResidualPull=unique_ptr<TH1D>(new TH1D{("xResidualPull"), "Pull of x-residual;x-residual pull; Hits", 100,-4,4});
+	yResidualPull=unique_ptr<TH1D>(new TH1D{("yResidualPull"), "Pull of y-residual;y-residual pull; Hits", 100,-4,4});
+	zResidualPull=unique_ptr<TH1D>(new TH1D{("zResidualPull"), "Pull of z-residual;z-residual pull; Hits", 100,-4,4});
+
 	pixelHitMap=unique_ptr<TH2D>(new TH2D{"pixelHitMap", "Hitmap by pixel;Columns;Rows", 256,0, 256, 256,0,256});
 
 	xRotation=unique_ptr<TH1D>(new TH1D{"xRotation", "x-rotation;x-rotation [rad.]; Hits", 100,-0.5,0.5});
 	yRotation=unique_ptr<TH1D>(new TH1D{"yRotation", "y-rotation;y-rotation [rad.]; Hits", 100,-0.5,0.5});
 	zRotation=unique_ptr<TH1D>(new TH1D{"zRotation", "z-rotation;z-rotation [rad.]; Hits", 100,-0.5,0.5});
 
+	xzShear=unique_ptr<TH1D>(new TH1D{"xzShear", "xz-shear;xz-shear; Hits", 100,-0.5,0.5});
+
 
 	zResidualByToT=std::unique_ptr<TH2D>(new TH2D{"zResidualByToT", "z-residual by ToT;ToT [#mus]; z-residual [mm]", 100,0,2.5, 200,-5,5});
 	xResidualByToT=std::unique_ptr<TH2D>(new TH2D{"xResidualByToT", "x-residual by ToT;ToT [#mus]; z-residual [mm]", 100,0,2.5, 200,-5,5});
 	zResidualByToTCorrected=std::unique_ptr<TH2D>(new TH2D{"zResidualByToTCorrected", "z-residual by ToT;ToT [#mus]; z-residual [mm]", 100,0,2.5, 200,-5,5});
 	zResidualByDriftTime=std::unique_ptr<TH2D>(new TH2D{"zResidualByDriftTime", "z-residuals as a function of drift time;Drift time [#mus];z-residual [mm]", int(0.8/ToABinWidth),-0.39999,0.4,50,-2,2});
+
+	xByzForShear=std::unique_ptr<TH2D>(new TH2D{"xByzForShear", "x-residual by z;z-position [mm]; x-residual [mm]", 100,-2,12, 100,-1,1});
 
 	auto rangeGlobal=rangeFromCorners( align.getAllChipCorners() );
 //	auto rangeQuad=rangeFromCorners( align.getAllChipCornersQuad() ); //automatic range
@@ -276,6 +287,11 @@ void ChipHistogrammer::fillHit(const PositionHit& h) {
 	xResidualByToT->Fill(h.ToT*25E-3, h.residual.x);
 	zResidualByDriftTime->Fill(h.driftTime/4096.*25E-3,h.residual.z);
 	nShiftedTrigger->Fill(h.nShiftedTrigger);
+
+	xResidualPull->Fill(h.residual.x/h.error.x);
+	yResidualPull->Fill(h.residual.y/h.error.y);
+	zResidualPull->Fill(h.residual.z/h.error.z);
+
 	global.fill(h.position, h.residual, h.ToT);
 	xResidualByPixel->Fill(h.column,h.row, h.residual.x);
 	zResidualByPixel->Fill(h.column,h.row, h.residual.z);
@@ -284,7 +300,7 @@ void ChipHistogrammer::fillHit(const PositionHit& h) {
 }
 
 void ChipHistogrammer::fillRotation(const TVector3& position, const TVector3& residual, const TVector3& COM) { //h in timepix coordinates, COM
-	//todo: do proper 3d rotation alignment
+	//todo: do proper 3d rotation alignment (not just small angle approx)
 	auto d=position-COM;
 	//x
 	double perp2x=d.Perp2({1,0,0});
@@ -298,6 +314,9 @@ void ChipHistogrammer::fillRotation(const TVector3& position, const TVector3& re
 	//for the moment, until error are included, use only x residuals in y rotation!
 //	double phiy=-h.residual.x/d.z();
 //	yRotation->Fill(phiy,d.z()*d.z());
+
+	xzShear->Fill( residual.x()/d.z(), d.z()*d.z() );
+	xByzForShear->Fill(d.z(), residual.x());
 
 	//z
 //	double phi=(d.y()*h.residual.x-d.x()*h.residual.y)/d.Perp2();
@@ -347,7 +366,12 @@ std::vector<PositionHit> QuadTrackFitter::getSpaceHits(const Alignment& alignmen
 		h=correctzPerPixel(h);
 
 		h = alignment.timeWalks[h.chip].correct(h);
+		//shear
+		auto& ca=alignment.chips[h.chip];
+		h.position.x+=(h.position.z-ca.COM.z())*ca.shearxz;
+
 		h = alignment.transform(h);
+
 		h.error = alignment.hitErrors.hitError( alignment.quad.rotateAndShiftBack(h.position).z );
 	}
 	return posHits;
@@ -379,13 +403,15 @@ void QuadTrackFitter::Loop(std::string outputFile,const Alignment& alignment) {
 		{"chip4", alignment} }};
 	ChipHistogrammer quad{"quad", alignment};
 
+
 	auto nEntries=reader.tree->GetEntries();
 	std::cout<<nEntries<<" entries\n";
 	long long cEntry=0;
+	bool pdfIsOpen=false;
 	while( getEntry(cEntry++) ) {
-		if( !(cEntry%10000) ) std::cout<<"entry "<<cEntry<<" / "<<nEntries<<"\n";
+		if( !(cEntry%1000) ) std::cout<<"entry "<<cEntry<<" / "<<nEntries<<"\n";
 
-		if(cEntry>=1E5) break;
+		if(cEntry>=1E6) break;
 
 		//retrieve hits
 		posHits=getSpaceHits(alignment);
@@ -406,6 +432,7 @@ void QuadTrackFitter::Loop(std::string outputFile,const Alignment& alignment) {
 //		} else {
 //			continue;
 //		}
+
 
 		averageHitPosition={0,0,0};
 		for(auto& h : posHits) {
@@ -439,8 +466,9 @@ void QuadTrackFitter::Loop(std::string outputFile,const Alignment& alignment) {
 		fitResults.Fill();
 
 		bool draw=true;
-		if(draw) {
-			std::cout<<"nHitsPassed="<<nHitsPassedTotal<<"";
+		if(draw and posHits.size()>200) {
+//			std::cout<<cEntry<<": nHitsPassed="<<nHitsPassedTotal<<"\n";
+			std::cout<<cEntry<<": nHits="<<posHits.size()<<"\n";
 //			SimpleDetectorConfiguration setupForDrawing { 10,40 /*x*/, 0,42 /*y beam*/, -10,40/*z drift*/};
 			auto setupForDrawing=simpleDetectorFromChipCorners(alignment.getAllChipCorners());
 			setupForDrawing.minz=-5E3*alignment.driftSpeed.value, setupForDrawing.maxz=5E3*alignment.driftSpeed.value;
@@ -448,12 +476,32 @@ void QuadTrackFitter::Loop(std::string outputFile,const Alignment& alignment) {
 //			HoughTransformer::drawCluster(posHits,setupForDrawing);
 //			drawQuadOutline(alignment, setupForDrawing.zmin() );
 
-			drawCluster2D(posHits,setupForDrawing);
-			alignment.drawChipEdges();
+			drawCluster2DPixel(posHits);
 
-			gPad->Update();
-			if(processDrawSignals()) break;
+//			drawCluster2D(posHits,setupForDrawing);
+//			alignment.drawChipEdges();
+
+			double frameTime=reader.triggerToA/4096.*25E-9;
+			TText frameTimeText(0.6,0.96, (std::to_string(frameTime)+" s").c_str() );
+			frameTimeText.SetNDC();
+			frameTimeText.DrawClone();
+
+//			gPad->Update();
+//			if(processDrawSignals()) break;
+
+			if(not pdfIsOpen) {
+				gPad->Print("eventDisplays.pdf(");
+				pdfIsOpen=true;
+			} else {
+				gPad->Print("eventDisplays.pdf");
+			}
+
 		}
 	}
+
+	if(pdfIsOpen) {
+		gPad->Print("eventDisplays.pdf]");
+	}
+
 	file.Write();
 }

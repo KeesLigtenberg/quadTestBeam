@@ -84,7 +84,7 @@ struct AlignmentHolder {
 	void read(std::istream&);
 	void write(std::ostream&);
 
-private:
+protected:
 	virtual void readParameters(std::istream&) =0;
 	virtual void writeParameters(std::ostream&) =0;
 
@@ -132,10 +132,7 @@ struct ShiftAndRotateAlignment : AlignmentHolder {
 		return Thpos;
 	}
 	virtual TVector3& rotateAndShift(TVector3& hpos) const {
-		for(int i=0; i<3; i++) {
-			const std::array<TVector3, 3> unitVectors={ TVector3{1,0,0}, TVector3{0,1,0}, TVector3{0,0,1} };
-			hpos=RotateAroundPoint(hpos, rotation[i],COM, unitVectors[i]);
-		}
+		hpos=rotate(hpos);
 		hpos+=shift;
 		return hpos;
 	}
@@ -149,6 +146,20 @@ struct ShiftAndRotateAlignment : AlignmentHolder {
 		rotateBack(hpos);
 		return hpos;
 	}
+
+	Vec3 rotate(const Vec3& hpos) const {
+		TVector3 Thpos=hpos; //convert to TVector3 and then call the same function
+		return rotate(Thpos);
+	}
+	TVector3& rotate(TVector3& hpos) const {
+		for (int i = 0; i < 3; i++) {
+			const std::array<TVector3, 3> unitVectors = { TVector3 { 1, 0, 0 },
+					TVector3 { 0, 1, 0 }, TVector3 { 0, 0, 1 } };
+			hpos = RotateAroundPoint(hpos, rotation[i], COM, unitVectors[i]);
+		}
+		return hpos;
+	}
+
 	virtual Vec3 rotateBack(const Vec3& hpos) const {
 		return rotateBack(hpos, COM);
 	}
@@ -173,7 +184,8 @@ struct ShiftAndRotateAlignment : AlignmentHolder {
 	virtual void updateCOM(TFile& file, std::string dirName);
 	virtual void updateRotation(TFile&, std::string dirName);
 
-private:
+
+protected:
 	void readParameters(std::istream& in) {
 		in>>shift>>COM>>rotation;
 	}
@@ -184,14 +196,13 @@ private:
 
 struct ChipAlignment : ShiftAndRotateAlignment {
 	ChipAlignment(int chipNumber) : ShiftAndRotateAlignment("CHIP" + std::to_string(chipNumber) ), chipNumber(chipNumber) {}
+
 	int chipNumber;//starting at 0
+	double shearxz{0};
 
 	using ShiftAndRotateAlignment::rotateAndShift;
 	TVector3& rotateAndShift(TVector3& hpos) const {
-		for(int i=0; i<3; i++) {
-			const std::array<TVector3, 3> unitVectors={ TVector3{1,0,0}, TVector3{0,1,0}, TVector3{0,0,1} };
-			hpos=RotateAroundPoint(hpos, rotation[i],COM, unitVectors[i]);
-		}
+		hpos=rotate(hpos);
 //		auto dir=(chipNumber==0 || chipNumber==3) ? -1 : 1 ; //because of chip orientation
 //		hpos[0]*=dir; hpos[1]*=dir;
 		hpos+=shift;
@@ -210,6 +221,7 @@ struct ChipAlignment : ShiftAndRotateAlignment {
 	}
 
 	virtual void updateShift(TFile&, const std::string& dirName);
+	virtual void updateShear(TFile&, const std::string& dirName);
 //	virtual void updateRotation(TFile& file, std::string dirName);
 
 	std::array<TVector3,4> getChipCorners() const { //fixme
@@ -247,6 +259,16 @@ struct ChipAlignment : ShiftAndRotateAlignment {
 		return nCrossings==1;
 	}
 
+protected:
+	void readParameters(std::istream& in) {
+		ShiftAndRotateAlignment::readParameters(in);
+		in>>shearxz;
+	}
+	void writeParameters(std::ostream& out) {
+		ShiftAndRotateAlignment::writeParameters(out);
+		out<<shearxz<<"\n";
+	}
+
 };
 
 void ShiftAndRotateAlignment::updateShift(TFile& file,const std::string& histName, int i) {
@@ -275,6 +297,21 @@ void ChipAlignment::updateShift(TFile& file, const std::string& dirName) {
 	for (int i = 0; i < 3; i++) {
 		const std::string histNames[] = { "xResidual", "yResidual", "zResidual" };
 		ShiftAndRotateAlignment::updateShift(file, dirName+"/local/"+histNames[i], i);
+	}
+}
+
+void ChipAlignment::updateShear(TFile& file, const std::string& dirName) {
+	auto histName="xzShear";
+	auto hist = getObjectFromFile<TH1>(dirName+"/"+histName, &file);
+	const int minEntries = 1000;
+	if (hist->GetEntries() < minEntries) {
+		std::cout << "skipped " << histName << " because less than " << minEntries
+				<< " in histogram\n";
+	} else {
+		const double learningRate=0.5;
+		double mean = learningRate*hist->GetMean(); //getMeanFromGausCoreFit(*hist);
+		shearxz -= mean;
+		std::cout << "update " << histName << " by " << learningRate<< " * " << mean << "\n";
 	}
 }
 
@@ -331,7 +368,7 @@ struct HitErrorCalculator : AlignmentHolder {
 		return error;
 	}
 
-private:
+protected:
 	void readParameters(std::istream& in) {
 		in>>z0>>sigma0>>diffusion;
 	}

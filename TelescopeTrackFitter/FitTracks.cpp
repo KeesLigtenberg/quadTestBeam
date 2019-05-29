@@ -38,6 +38,7 @@ void testFitTracks(std::string inputfile, std::string alignmentFile="align.dat")
 	Alignment align(alignmentFile);
 	telescopeFitter.setAlignment(align);
 
+	telescopeFitter.doPartialFits=true;
 //	telescopeFitter.displayEvent=true;
 	telescopeFitter.makeMask(5e3);
 

@@ -18,6 +18,7 @@
 #include "TPaveLabel.h"
 #include "TPaveStats.h"
 #include "TSystem.h"
+#include "TProfile2D.h"
 
 #include "../TrackFitter/PositionHit.h"
 #include "../eventBuilder/Hit.h"
@@ -346,13 +347,13 @@ inline void HoughTransformer::drawCluster(const T& cluster, const DetectorConfig
 	TTree pointTree;
 	PositionHit h(1E4,1E4,1E4,0, Hit{0,0,0,0} );
 	pointTree.Branch("h", "PositionHit", &h);
-//	pointTree.Fill(); //fill one with zero ToT to set scale
+	pointTree.Fill(); //fill one with zero ToT to set scale
 
 	for(auto& iHit : cluster ) {
 		h=iHit;
 //		std::cout<<int(h.ToT)<<"\n";
 //		if(h.flag==PositionHit::Flag::shiftedTrigger) continue;
-//		if(h.flag==PositionHit::Flag::valid)
+		if(h.flag==PositionHit::Flag::valid)
 			pointTree.Fill();
 	}
 	if(not pointTree.GetEntries()) return;
@@ -362,8 +363,8 @@ inline void HoughTransformer::drawCluster(const T& cluster, const DetectorConfig
 	double totAxis=1.6;
 	static TCanvas* canv=new TCanvas("cluster_display", "Event display", 800,600);
 	canv->cd();
-	pointTree.Draw( std::string("h.position.z:h.position.y:h.position.x:h.nShiftedTrigger").c_str() , "", "*colz"); //ToT to microseconds
-//	pointTree.Draw( ("h.position.z:h.position.y:h.position.x:TMath::Min(h.ToT*0.025, "+std::to_string(totAxis)+")").c_str() , "", "*colz"); //ToT to microseconds
+//	pointTree.Draw( std::string("h.position.z:h.position.y:h.position.x:h.nShiftedTrigger").c_str() , "", "*colz"); //ToT to microseconds
+	pointTree.Draw( ("h.position.z:h.position.y:h.position.x:TMath::Min(h.ToT*0.025, "+std::to_string(totAxis)+")").c_str() , "", "*colz"); //ToT to microseconds
 
 	TH1* axisObject= dynamic_cast<TH1*>( gPad->GetPrimitive("htemp") );
 	if(!axisObject) {std::cout<<"could not get axis object!?\n"; throw 1;}
@@ -483,6 +484,66 @@ inline void drawCluster2D(const T& cluster, const DetectorConfiguration& detecto
 	gPad->Update();
 
 }
+
+template<class T > //=std::list<HitCluster>
+inline void drawCluster2DPixel(const T& cluster) {
+	TTree pointTree;
+	PositionHit h(1E4,1E4,1E4,0, Hit{0,0,0,0} );
+	pointTree.Branch("h", "PositionHit", &h);
+//	pointTree.Fill(); //fill one with zero ToT to set scale
+
+	TProfile2D prof("pixelProfile", "pixelProfile", 512,0,512,512,0,512);
+
+	for(auto& iHit : cluster ) {
+		h=iHit;
+//		std::cout<<int(h.ToT)<<"\n";
+		if(h.flag==PositionHit::Flag::shiftedTrigger) continue;
+//		if(h.flag==PositionHit::Flag::valid)
+//			pointTree.Fill();
+				prof.Fill(
+						(h.chip>=2)*256+(h.chip==0||h.chip==3)*(256-2*h.column)+h.column,
+						(h.chip==1||h.chip==2)+255+(h.chip==0||h.chip==3)*-2*h.row+h.row,
+						h.driftTime/4096.*25E-3);//choose between driftTime,
+//						h.ToT*0.025); //and ToT
+	}
+//	if(not pointTree.GetEntries()) return;
+
+	pointTree.SetMarkerStyle(7);
+	gStyle->SetOptTitle(0);
+	gStyle->SetPalette(kRainBow);
+	double totAxis=5;
+	static TCanvas* canv=new TCanvas("cluster_display2DPixel", "Event display 2D per pixel", 900,800);
+	canv->cd();
+//	pointTree.Draw( "h.ToT"
+//			":(h.chip==1||h.chip==2)+255+(h.chip==0||h.chip==3)*-2*h.row+h.row"
+//			":(h.chip>=2)*256+(h.chip==0||h.chip==3)*(256-2*h.column)+h.column"
+//			">>hpixel(512,0,512,512,0,512)" , "", "profcolz");
+
+	auto axisObject=&prof; //dynamic_cast<TH1*>( gPad->GetPrimitive("hpixel") );
+	auto yaxis=axisObject->GetYaxis();
+	if(!yaxis) {std::cout<<"could not get yaxis!?\n"; throw 1;}
+	yaxis->SetTitle("Rows");
+	auto xaxis=axisObject->GetXaxis();
+	if(!xaxis) {std::cout<<"could not get xaxis!?\n"; throw 1;}
+	xaxis->SetTitle("Columns");
+	for(auto axis : {xaxis, yaxis} )
+		axis->SetTitleOffset(1.1);
+	for(auto axis : {xaxis, yaxis} ) {
+		axis->SetTitleSize(0.045);
+		axis->SetLabelSize(0.045);
+	}
+	axisObject->SetMaximum(totAxis);
+	axisObject->SetMinimum(0);
+
+	axisObject->DrawCopy("colz0");
+	//pointTree.Draw( "h.position.y:h.position.x" , "", "same");
+	gPad->SetMargin(0.15,0.15,0.15,0.05);//l r b t
+	gPad->Update();
+
+	gPad->Update();
+
+}
+
 
 //todo: move all draw functions away from houghtransformer
 inline bool processDrawSignals() {

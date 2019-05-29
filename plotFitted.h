@@ -1,5 +1,6 @@
 //root macro
 #include <cstdlib>
+#include <vector>
 
 #include "TPolyLine.h"
 #include "TGraph.h"
@@ -48,14 +49,29 @@ void drawChipEdgesLocal(std::string alignFile="align.dat") {
 	gStyle->SetOptStat(0);
 }
 
-void combineHistogramsForChips(std::string histName="nHits", std::string fileName="combinedFit.root") {
+void combineHistogramsForChips(std::string histName="nHits", std::string fileName="combinedFit.root", bool addQuad=false) {
 	HistogramCombiner combination(histName+"combination");
+
+	if(addQuad) {
+		combination.setStyle(3);
+		auto quadHist=getObjectFromFile<TH1>("quad/"+histName, fileName);
+		if(histName=="nHits") {
+			quadHist->Rebin(2);
+			quadHist=convertToTH1D(quadHist);
+		}
+		combination.add( quadHist , "All chips" );
+	}
+
 	for(int i=0; i<4; i++) {
 		auto hist=getObjectFromFile<TH1>(chipDirectories[i]+"/"+histName, fileName);
+		if(histName=="nHits") {
+			hist->Rebin(2);
+			hist=convertToTH1D(hist);
+		}
 //		hist->Draw(); gPad->Update(); cin.get();
 		combination.add( hist , "chip "+std::to_string(i+1) );
 	}
-	//combination.normalise();
+	combination.normalise();
 	combination.createCombined();
 }
 void combineDrawHistogramsForChips(std::string expression, std::string cut="1", std::string drawOption="", std::string histName="Hist", std::string fileName="combinedFit.root", std::string treeName="fitResults") {
@@ -77,6 +93,7 @@ void combineHistogramsForChipsOnPads(std::string histName="nHits", std::string f
 		hist->SetTitle(("Chip "+to_string(i+1)).c_str());
 		canv->cd(i+1);
 		hist->Draw("colz");
+		getMeanFromGausFitAroundMean(*hist);
 	}
 }
 
@@ -328,6 +345,7 @@ TH1* plotFittedTimeWalk(TH2* uncorrected) {
 	double offset=simple->GetParameter("offset");
 	means=shiftY(means, -simple->GetParameter("offset") );
 
+	new TCanvas("fittedTW", "fitted TW", 800,600);
 	means->Draw();	
 	simple->SetParameters(0.366,0.066,0);
 	means->Fit(simple, "", "", minToT,2.5);
@@ -337,13 +355,14 @@ TH1* plotFittedTimeWalk(TH2* uncorrected) {
 	means->GetYaxis()->SetTitleOffset(1.3);
 	means->GetYaxis()->SetTitleSize(0.05);
 	means->GetYaxis()->SetLabelSize(0.05);
-	means->GetYaxis()->SetRangeUser(0,3.5);
+	means->GetYaxis()->SetRangeUser(0,3);
 	means->GetXaxis()->SetTitleOffset(1.3);
 	means->GetXaxis()->SetTitleSize(0.05);
 	means->GetXaxis()->SetLabelSize(0.05);
 	gPad->SetMargin(0.15,0.1,0.15,0.1);
 
 	simple->SetLineWidth(1);
+	simple->SetNpx(1000);
 	gPad->SetTicks(1,1);
 	gStyle->SetOptStat(0);
 	gStyle->SetOptFit(0);
@@ -448,11 +467,13 @@ TF1* fitDiffusion( TH2* h2 , std::string x="x", double z0=-1, std::string canvna
 	else drift->SetParameter(0, 0.15);//sigma0
 
 
-//	if(x=="x") {
-//		for(int i=11; i<=16; i++) {
-//			h2_2->SetBinError(i, 0.01);
-//		}
-//	}
+	//add error because of guard
+	if(x=="x")
+	{
+		for(int i=12; i<=15; i++) {
+			h2_2->SetBinError(i, 0.01);
+		}
+	}
 
 	//add error to fit
 //	h2_2=addErrorToHist(h2_2, 1E-3); //set all error bins equal
@@ -497,7 +518,7 @@ void plotDiffusionFromHist(std::string filename="combinedFit.root", std::string 
 //	std::string chip="quad";
 	{
 		TH2* h2=getObjectFromFile<TH2>( chip+"/"+histogramName, filename);
-		fitDiffusion(h2, dir, -1, chip);
+		fitDiffusion(h2, dir, -0.8, chip);
 	}
 }
 
@@ -913,7 +934,7 @@ std::vector<std::vector<double>> fitDeformationCorrectionsPerSliceY(
 	fitParametersCanvas->Divide(2,2);
 
 	for(int iChip=0; iChip<4; iChip++) {
-		std::cout<<"\n\n";
+//		std::cout<<"\n\n";
 		xByXZCanvas->cd(iChip+1);
 		gPad->SetTicks(1,1);
 		auto xResidualByXY=getCombinedDeformations(chipDirectories[iChip]+"/locExp/xResidualByPosition",fileNames);
@@ -962,7 +983,7 @@ std::vector<std::vector<double>> fitDeformationCorrectionsPerSliceY(
 			estimatedValues[iChip][iPar*3+selectedParameter]=aCoefficient;
 			for(int iFit=1; iFit<5; iFit++) {
 				estimatedValues[iChip][12+iPar+4*(iFit-1)]=fitResult->GetParams()[iFit]/aCoefficient;
-				std::cout<<iFit<<": "<<fitResult->GetParams()[iFit]/aCoefficient<<"\n";
+//				std::cout<<iFit<<": "<<fitResult->GetParams()[iFit]/aCoefficient<<"\n";
 			}
 		}
 
@@ -978,12 +999,17 @@ std::vector<std::vector<double>> fitDeformationCorrectionsPerSliceY(
 
 std::vector<std::vector<double>> fitDeformationCorrections2D(
 		std::vector<std::string> fileNames={"./run668/combinedFit.root","./run672/combinedFit.root","./run676/combinedFit.root"},
-		std::string histName="locExp/xResidualByPosition"
+		std::string histName="locExp/xResidualByPosition",
+		std::string alignFile="run668/align.dat"
 ) {
 	auto correction=new TF2("correction",
 			"(1+[b0]*y+[c0]*y*y+[d0]*y*y*y+[e0]*y*y*y*y)*breitwigner(0)+(1+[b1]*y+[c1]*y*y+[d1]*y*y*y+[e1]*y*y*y*y)*breitwigner(3) "
 			"+"
 			"(1+[b2]*y+[c2]*y*y+[d2]*y*y*y+[e2]*y*y*y*y)*breitwigner(6)+(1+[b3]*y+[c3]*y*y+[d3]*y*y*y+[e3]*y*y*y*y)*breitwigner(9)+[offset]");
+	correction->SetLineWidth(1);
+	correction->SetNpx(1000);
+	correction->SetNpy(1000);
+
 	std::vector<std::vector<double> > estimatedValues=fitDeformationCorrectionsPerSliceY(fileNames);
 //	{
 //			{7,1,2.6, /*breit wigner 1*/ -3,2,3, /*breit wigner 1*/3, 14, 3, /*breit wigner 4*/ -8, 15, 2,/*breit wigner 4*/   1,1,1,1, 1,1,1,1, 1E-2,1E-2,1E-2,1E-2, 1E-3,1E-3,1E-3,1E-3, 0,0,0,0, /*a,b,c,d,e*/ 0 /*offset*/ },
@@ -1000,27 +1026,43 @@ std::vector<std::vector<double>> fitDeformationCorrections2D(
 //		estimatedValues[i][32]=fitted1DValues[i][12];
 //	}
 
+	Alignment align(alignFile);
 
 
 	gStyle->SetOptStat(0);
 	gStyle->SetOptFit(0);
 
-	auto canv=new TCanvas();
-	canv->Divide(2,2);
+	auto canv=new TCanvas("2dCorrectinoFit","2D fit of deformations",1000,1200);
+//	canv->Divide(2,2);
+	canv->SetMargin(0.1,0.2,0.1,0.05);
 
 	std::cout<<"{";
 	for(int i=0; i<4; i++) {
-		canv->cd(i+1);
+//		canv->cd(i+1);
 		gPad->SetTicks(1,1);
+
+		auto corners=align.chips[i].getChipCorners();
+		auto xminmax=std::minmax_element(corners.begin(), corners.end(), [](const TVector3& a, const TVector3& b){ return a.x() < b.x(); });
+		auto yminmax=std::minmax_element(corners.begin(), corners.end(), [](const TVector3& a, const TVector3& b){ return a.y() < b.y(); });
 
 //		auto xResidualByPosition=getObjectFromFile<TProfile2D>(chipDirectories[i]+"/xResidualByPosition_locExp", fileName );
 		auto xResidualByPosition=getCombinedDeformations(chipDirectories[i]+"/"+histName,fileNames);
 		xResidualByPosition->Rebin2D(4,4);
-		xResidualByPosition->Draw("colz0");
+//		xResidualByPosition->SetAxisRange( xminmax.first->x(),  xminmax.second->x() + (i==1 ? -0.5 : 0), "X");
+//		xResidualByPosition->SetAxisRange( yminmax.first->y(),  yminmax.second->y(), "Y");
+//		std::cout<<"\n"<<"yrange="<<yminmax.first->y()<<" - "<<yminmax.second->y()<<"\n";
+		xResidualByPosition->SetTitle(";x-position [mm]; y-position [mm]; mean x-residual [mm]");
+		xResidualByPosition->SetTitleOffset(1.2, "y");
+		xResidualByPosition->SetTitleOffset(1.7, "z");
+		xResidualByPosition->Draw(i ? "colz0same" : "colz0");
 
-		for(int j=0; j<correction->GetNpar(); j++) correction->SetParameter( j, estimatedValues[i][j] );
+		std::cout<<"/*from slices, not fitted:*/";
+		for(int j=0; j<correction->GetNpar(); j++) correction->FixParameter( j, estimatedValues[i][j] );
 
-		xResidualByPosition->Fit(correction, "QS", "");//, chipRange[i].min, chipRange[i].max);
+		const double margin[]={-0.1,-0.1,-0.05,0};
+		correction->SetRange( xminmax.first->x()+margin[i], yminmax.first->y()+margin[i], xminmax.second->x()-margin[i], yminmax.second->y()-margin[i] );
+
+		xResidualByPosition->Fit(correction, "QSR", "");//, chipRange[i].min, chipRange[i].max);
 		//xResidualByPosition->SetTitle(";x-position [mm];x-residual [mm]");
 
 		std::cout<<"{";
@@ -1030,6 +1072,8 @@ std::vector<std::vector<double>> fitDeformationCorrections2D(
 			estimatedValues[i][j]=correction->GetParameter(j);
 		}
 	}
+
+	align.drawChipEdges(false);
 
 	return estimatedValues;
 }
@@ -1150,9 +1194,10 @@ void drawDeformationsWithAreas(TProfile2D* prof) {
 	gStyle->SetOptStat(1);
 	HistogramCombiner combined(prof->GetName()+std::string("freq"));
 	auto freq=getFrequencyHistogramFromProfile(prof);
-	combined.add(freq, "All bins (RMS="+std::to_string( int( freq->GetRMS()*1000) )+")");
+	combined.add(freq, "All bins (RMS="+std::to_string( int( freq->GetRMS()*1000) )+" #mum)");
 	auto freqArea=getFrequencyInAreaFromProfile(prof, areas);
-	combined.add(freqArea, "Bins inside selected area (RMS="+std::to_string( int( freqArea->GetRMS()*1000) )+")");
+	combined.add(freqArea, "Bins inside selected area (RMS="+std::to_string( int( freqArea->GetRMS()*1000) )+" #mum)");
+	combined.setNcolumn(1);
 	combined.createCombined();
 }
 void drawDeformationsWithAreas(TH2D* h2) {
@@ -1176,9 +1221,10 @@ void drawDeformationsWithAreas(TH2D* h2) {
 	gStyle->SetOptStat(1);
 	HistogramCombiner combined(h2->GetName()+std::string("freq"));
 	auto freq=getFrequencyHistogramFromProfile(h2);
-	combined.add(freq, "All bins (RMS="+std::to_string( int( freq->GetRMS()*1000) )+")");
+	combined.add(freq, "All bins (RMS="+std::to_string( int( freq->GetRMS()*1000) )+" #mum)");
 	auto freqArea=getFrequencyInArea(h2, areas);
-	combined.add(freqArea, "Bins inside selected area (RMS="+std::to_string( int( freqArea->GetRMS()*1000) )+")");
+	combined.add(freqArea, "Bins inside selected area (RMS="+std::to_string( int( freqArea->GetRMS()*1000) )+" #mum)");
+	combined.setNcolumn(1);
 	combined.createCombined();
 }
 
@@ -1319,6 +1365,29 @@ void plotDeformationPerSlice(std::vector<std::string> fileNames={"./run668/combi
 	}
 }
 
+void plotDeformationsXZ( std::string fileName, std::string objectName="quad/corrected/xResidualByXZ") {
+	auto prof2d=getObjectFromFile<TProfile2D>(objectName, fileName);
+	prof2d->Rebin2D(6,2);
+	removeBinsWithFewerEntries(prof2d, 500);
+	gStyle->SetPalette(kRainBow);
+	prof2d->SetMinimum(-0.1);
+	prof2d->SetMaximum(0.1);
+	prof2d->Draw("colz0");
+	gPad->SetMargin(0.10,0.15,0.1,0.05);
+	gPad->SetTicks(1,1);
+	increaseAxisSize(prof2d);
+	prof2d->GetZaxis()->SetTitleSize(0.05);
+	prof2d->GetZaxis()->SetLabelSize(0.05);
+	prof2d->GetYaxis()->SetTitleOffset(1.05);
+
+	HistogramCombiner combined{"combinedxByXZ"};
+	auto freq=getFrequencyHistogramFromProfile(prof2d);
+	combined.add(freq, "Mean x-residual per bin (RMS="+std::to_string( int( freq->GetRMS()*1000) )+" #mum)");
+	combined.setNcolumn(1);
+	combined.setStyle(3);
+	combined.createCombined();
+}
+
 void compareChipEdges(std::vector<std::string> alignFiles) {
 	TH2D axis{"axisobj", ";x-position [mm];y-position [mm]",1000,0,29.04,1000,-14.55,25.05 };
 	new TCanvas("chipEdges", "chipEdges", 850,1000)	;
@@ -1373,6 +1442,39 @@ void drawPartialFitResidual(std::string filename="combinedFit.root") {
 
 }
 
+void compareTelescopeAngles(std::string filename="test.root") {
+	auto tree = getObjectFromFile<TTree>("fitTree", filename);
+	std::string XZ{"XZ"};
+	auto expressions = std::vector<std::string>{"(fitFirstThree."+XZ+".slope-fit."+XZ+".slope)", "(fitSecondThree."+XZ+".slope-fit."+XZ+".slope)", "fitFirstThree."+XZ+".slope-fitSecondThree."+XZ+".slope"};
+	auto histnames = std::vector<std::string>{"firstAll(100,-0.002,0.002)", "lastAll(100,-0.002,0.002)","firstLast(100,-0.002,0.002)"};
+//	auto titles = std::vector<std::string>{"(Difference of first and all)*#sqrt{2};Angle [Rad.]", "(Difference of last and all)*#sqrt{2}","Difference of first and last"};
+	auto titles = std::vector<std::string>{"Difference of first and all;Angle [Rad.]", "Difference of last and all","Difference of first and last"};
+
+	HistogramCombiner comb("telescopeAngles");
+	for(int i=0; i<expressions.size(); i++) {
+		auto h=getHistFromTree(*tree, expressions[i],"1", histnames[i], "goff");
+		h->SetTitle(titles[i].c_str());
+		h->SetTitle((h->GetTitle()+std::string(" (RMS = ")+to_string_precision(h->GetRMS()*1E3,3)+" mRad. )" ).c_str());
+		comb.add( h );
+	}
+
+	comb.setNcolumn(1);
+	comb.createCombined();
+}
+void scanTelescopeForFieldWires(std::string filename="test.root") {
+	auto tree = getObjectFromFile<TTree>("fitTree", filename);
+	auto canv=new TCanvas();
+	canv->Print("scatteringInTelescope.pdf[");
+	for(int i=150; i<230; i+=2) {
+		tree->Draw(("fitFirstThree.XZ.slope-fitSecondThree.XZ.slope:fmod(fit.YZ.intercept+"+to_string(i)+"*fit.YZ.slope,2)").c_str(), "", "");
+		canv->Update();
+		canv->Print("scatteringInTelescope.pdf");
+	}
+	canv->Print("scatteringInTelescope.pdf]");
+
+
+}
+
 TProfile2D* drawPixelzCorrectionModulus(std::string filename="combinedFit.root") {
 	auto th2 = getObjectFromFile<TProfile2D>("quad/zResidualByPixel", filename);
 	int xbins=2, ybins=16;
@@ -1389,13 +1491,72 @@ TProfile2D* drawPixelzCorrectionModulus(std::string filename="combinedFit.root")
 }
 
 void compareOutOfSyncBackground() {
-	CombineHistogramsFromFiles("eventCuts/selectedHitAverageToTrackx",
-			{"combinedFit_fiducial1M.root","combinedFit_outOfSync1M.root"},
-			{"Selected tracks (offset=0)", "Telescope delayed (offset=100 frames)"},
+	CombineHistogramsFromFiles("eventhist/selectedHitAverageToTrackx",
+			{"combinedFit_fiducial1Mnew.root","combinedFit_outOfSync1Mnew.root"},
+			{"Selected tracks (offset=0)", "Telescope delayed (offset=1000 frames)"},
 			[](HistogramCombiner &c){
 				c.setNcolumn(1);
 				c.setLogY();
 			});
+
+}
+
+void drawOutOfSyncBackground(
+	std::vector<std::string> files = {"combinedFit_fiducial1Mnew.root","combinedFit_outOfSync1Mnew.root"} ) {
+
+//	std::vector<std::string> histnames{"tracks(60,-0.3,0.3)", "background(60,-0.3,0.3)"};
+	std::vector<std::string> histnames{"tracksPull(60,-15,15)", "background(60,-15,15)"};
+	std::vector<std::string> titles {"Selected tracks (offset=0)", "Telescope delayed (offset=1000 frames)"};
+
+	HistogramCombiner c{"outOfSync"};
+
+	for(int i=0; i<files.size(); i++) {
+		auto h=getHistFromTreeInFile(files[i], "fitResults", "meanQuadDiff.x/sqrt(pow(meanQuadError.x,2)+0.032*0.032)", "Sum$(nHitsPerChipValid)<200 && Sum$(nHitsPerChipValid)>20 && matched", histnames[i] ,"goff");
+//		auto h=getHistFromTreeInFile(files[i], "fitResults", "meanQuadDiff.x", "Sum$(nHitsPerChipValid)<200 && Sum$(nHitsPerChipValid)>20 && matched", histnames[i] ,"goff");
+//		h->SetTitle((titles[i]+";x-residual [mm];Events").c_str());
+		h->SetTitle((titles[i]+";Pull of x-residual;Events").c_str());
+		c.add(h);
+	}
+
+	c.setNcolumn(1);
+	c.setLogY();
+	c.setStyle(5);
+	c.createCombined();
+}
+
+void drawQuadMeanResiduals( std::string fileName="combinedFit.root" ) {
+
+	auto cuts="Sum$(nHitsPerChipValid)<200 && Sum$(nHitsPerChipValid)>20 && matched && fabs(centerDiffPerChipFit.x)>1E-10";
+
+	auto residual=getHistFromTreeInFile(fileName, "fitResults", "meanQuadDiff.x", cuts, "residual(60,-0.3,0.3)" ,"goff");
+	residual->SetTitle((fileName+";x-residual [mm];Events").c_str());
+	new TCanvas();
+	residual->Draw();
+//	HistogramCombiner residualHistogrammer{"residual", residual};
+//	residualHistogrammer.makeLegend=false;
+//	residualHistogrammer.setStyle(3);
+//	residualHistogrammer.createCombined();
+
+
+	auto pull=getHistFromTreeInFile(fileName, "fitResults", "meanQuadDiff.x/meanQuadError.x", cuts, "pull(50,-5,5)" ,"goff");
+	pull->SetTitle((fileName+";x-residual/#sigma_{x};Events").c_str());
+	new TCanvas();
+	pull->Draw();
+//	HistogramCombiner pullHistogrammer{"pull", pull};
+//	pullHistogrammer.makeLegend=false;
+//	pullHistogrammer.setStyle(3);
+//	pullHistogrammer.createCombined();
+
+
+	auto residualCenter=getHistFromTreeInFile(fileName, "fitResults", "centerDiffPerChipFit.x", cuts , "residualCenter(60,-0.3,0.3)" ,"goff");
+	residualCenter->SetTitle((fileName+";x-residual [mm];Events").c_str());
+	new TCanvas();
+	residualCenter->Draw();
+
+	auto pullCenter=getHistFromTreeInFile(fileName, "fitResults", "centerDiffPerChipFit.x/centerErrorPerChipFit.x", cuts, "pullCenter(50,-5,5)" ,"goff");
+	pullCenter->SetTitle((fileName+";x-residual/#sigma_{x};Events").c_str());
+	new TCanvas();
+	pullCenter->Draw();
 
 }
 
