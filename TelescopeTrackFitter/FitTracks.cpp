@@ -40,7 +40,7 @@ void testFitTracks(std::string inputfile, std::string alignmentFile="align.dat")
 
 	telescopeFitter.doPartialFits=true;
 //	telescopeFitter.displayEvent=true;
-	telescopeFitter.makeMask(5e3);
+//	telescopeFitter.makeMask(5e3);
 
 	telescopeFitter.fitTracks("test.root");
 

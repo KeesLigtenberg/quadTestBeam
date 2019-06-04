@@ -21,6 +21,7 @@
 #include "TROOT.h"
 #include "TSystem.h"
 #include "TH1.h"
+#include "TRandom.h"
 
 #include "../Alignment/Alignment.h"
 #include "DetectorConfiguration.h"
@@ -31,6 +32,65 @@
 #include "makeNoisyPixelMask.cpp"
 
 using namespace std;
+
+namespace {
+
+	struct TrackState {
+		TVector3 position;
+		double angle[2];
+
+		TrackState(TVector3 position, double xangle, double yangle) : position(position) {
+			angle[0]=xangle;
+			angle[1]=yangle;
+		}
+
+		void scatter(double scatterAngle) {
+			for(int i=0; i<2; i++) {
+				angle[i]+=gRandom->Gaus(0,scatterAngle);
+			}
+		}
+		void propagate(double distance) {
+			for(int i=0; i<2; i++) {
+				position[i]+=distance*angle[i];
+			}
+			position[2]+=distance;
+		}
+		void propagateTo(double zcoordinate) {
+			propagate(zcoordinate-position.z());
+		}
+
+	};
+
+	std::vector<std::vector<PositionHit> > generateSpaceHits(const TelescopeConfiguration& detector) {
+		TrackState track{ {5.01,5.01,0}, 0,0};
+		std::vector<std::vector<PositionHit> > hits(6);
+
+		track.propagateTo(detector.planePosition[0]);
+		track.scatter(0.1E-3);
+		hits[0].push_back( PositionHit{track.position.x(), track.position.y(), track.position.z(), 0} );
+		track.propagateTo(detector.planePosition[1]);
+		track.scatter(0.1E-3);
+		hits[1].push_back( PositionHit{track.position.x(), track.position.y(), track.position.z(), 1} );
+		track.propagateTo(detector.planePosition[2]);
+		track.scatter(0.1E-3);
+		hits[2].push_back( PositionHit{track.position.x(), track.position.y(), track.position.z(), 2} );
+
+		track.propagateTo(188);
+		track.scatter(0.24E-3);
+
+		track.propagateTo(detector.planePosition[3]);
+		track.scatter(0.1E-3);
+		hits[3].push_back( PositionHit{track.position.x(), track.position.y(), track.position.z(), 3} );
+		track.propagateTo(detector.planePosition[4]);
+		track.scatter(0.1E-3);
+		hits[4].push_back( PositionHit{track.position.x(), track.position.y(), track.position.z(), 4} );
+		track.propagateTo(detector.planePosition[5]);
+		track.scatter(0.1E-3);
+		hits[5].push_back( PositionHit{track.position.x(), track.position.y(), track.position.z(), 5} );
+
+		return hits;
+	}
+}
 
 TelescopeTrackFitter::TelescopeTrackFitter(std::string inputfile, const TelescopeConfiguration& detector) :
 	detector(detector),
@@ -189,7 +249,7 @@ void TelescopeTrackFitter::fitTracks(std::string outputfilename) {
 
 	//loop over all entries
 	long int nPassed=0,nClusters=0;
-	for( int iEvent=0; iEvent<5E5 //nEvents
+	for( int iEvent=0; iEvent<1E5 //nEvents
 	; iEvent++ ) {
 
 		if(!(iEvent%10000))
@@ -199,7 +259,8 @@ void TelescopeTrackFitter::fitTracks(std::string outputfilename) {
 		if(!getEntry(iEvent) ) continue;
 
 		//apply mask and convert
-		std::vector<std::vector<PositionHit> > spaceHit = getSpaceHits();
+		//std::vector<std::vector<PositionHit> > spaceHit = getSpaceHits();
+		std::vector<std::vector<PositionHit> > spaceHit = generateSpaceHits(detector);
 
 		std::vector<FitResult3D> fits;
 
