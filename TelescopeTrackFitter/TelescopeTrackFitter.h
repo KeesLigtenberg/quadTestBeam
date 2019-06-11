@@ -62,6 +62,7 @@ public:
 	bool constructLineParallelToZ=false;
 	bool doBinnedClustering=false;
 	bool doPartialFits=false;
+	bool generateHits=false;
 
 	double maxResidual=0.2;
 	int nMinPlanesHit=5;
@@ -86,6 +87,7 @@ private:
 	BinnedClusterer binnedClustering;
 	std::unique_ptr<ResidualHistogrammer> residualHistograms;
 	std::unique_ptr<TrackHistogrammer> trackHistograms, trackHistogramsFirst, trackHistogramsSecond;
+	std::unique_ptr<TH1D> simulatedQuadxResidual{nullptr}, simulatedQuadyResidual{nullptr};
 
 	bool passEvent( const std::vector<std::vector<PositionHit> >& spaceHit ) const;	//return true if the event is passed
 

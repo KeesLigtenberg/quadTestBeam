@@ -326,6 +326,7 @@ inline void HoughTransformer::drawClusters(const T& clusters, const DetectorConf
 
 	pointTree.SetMarkerStyle(20);
 	pointTree.Draw("h.position.y:h.position.z:h.position.x:cluster*10", "", "*colz");
+//	pointTree.Draw("h.residual.y:h.position.z:h.residual.x:cluster*10", "", "*colz");
 
 
 	gPad->Update();
@@ -338,6 +339,8 @@ inline void HoughTransformer::drawClusters(const T& clusters, const DetectorConf
 	TH1* axisObject= dynamic_cast<TH1*>( gPad->GetPrimitive("htemp") );
 	axisObject->GetXaxis()->SetLimits(detector.xmin(),detector.xmax());
 	axisObject->GetZaxis()->SetLimits(detector.ymin(),detector.ymax());
+//	axisObject->GetXaxis()->SetLimits(-.05,.05);
+//	axisObject->GetZaxis()->SetLimits(-.05,.05);
 	axisObject->DrawClone();
 	gPad->Update();
 }
@@ -364,7 +367,8 @@ inline void HoughTransformer::drawCluster(const T& cluster, const DetectorConfig
 	static TCanvas* canv=new TCanvas("cluster_display", "Event display", 800,600);
 	canv->cd();
 //	pointTree.Draw( std::string("h.position.z:h.position.y:h.position.x:h.nShiftedTrigger").c_str() , "", "*colz"); //ToT to microseconds
-	pointTree.Draw( ("h.position.z:h.position.y:h.position.x:TMath::Min(h.ToT*0.025, "+std::to_string(totAxis)+")").c_str() , "", "*colz"); //ToT to microseconds
+//	pointTree.Draw( ("h.position.z:h.position.y:h.position.x:TMath::Min(h.ToT*0.025, "+std::to_string(totAxis)+")").c_str() , "", "*colz"); //ToT to microseconds
+	pointTree.Draw( std::string("h.position.z:h.residual.y:h.residual.x:h.chip").c_str() , "", "*colz"); //ToT to microseconds
 
 	TH1* axisObject= dynamic_cast<TH1*>( gPad->GetPrimitive("htemp") );
 	if(!axisObject) {std::cout<<"could not get axis object!?\n"; throw 1;}

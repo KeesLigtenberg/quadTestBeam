@@ -39,8 +39,11 @@ void testFitTracks(std::string inputfile, std::string alignmentFile="align.dat")
 	telescopeFitter.setAlignment(align);
 
 	telescopeFitter.doPartialFits=true;
-//	telescopeFitter.displayEvent=true;
-//	telescopeFitter.makeMask(5e3);
+	telescopeFitter.maxResidual=0.015;
+//	telescopeFitter.displayEvent=false;
+//	telescopeFitter.doBinnedClustering=true;
+//	telescopeFitter.generateHits=true;
+	if(not telescopeFitter.generateHits) telescopeFitter.makeMask(5e3);
 
 	telescopeFitter.fitTracks("test.root");
 
@@ -109,7 +112,7 @@ void FitTracks (std::string inputfile, int nRepeatFit=6) {
 					break;
 				case 3:
 					telescopeFitter.setSlopes( telescopeFitter.getSlopes() );
-					telescopeFitter.maxResidual=0.05;
+					telescopeFitter.maxResidual=0.015;
 					break;
 				case 4:
 					telescopeFitter.addToShifts( means );

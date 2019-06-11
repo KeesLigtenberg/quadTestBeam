@@ -1526,12 +1526,15 @@ void drawOutOfSyncBackground(
 
 void drawQuadMeanResiduals( std::string fileName="combinedFit.root" ) {
 
-	auto cuts="Sum$(nHitsPerChipValid)<200 && Sum$(nHitsPerChipValid)>20 && matched && fabs(centerDiffPerChipFit.x)>1E-10";
+	auto cuts="Sum$(nHitsPerChipValid)<200 && Sum$(nHitsPerChipValid)>20 && matched && fabs(centerDiffPerChipFit.x)>1E-10"; // && meanQuadPosition.z<8 && meanQuadPosition.z>4";
+	auto gausOffset=new TF1("gausOffset", "gaus(0)+[o]");
+	gausOffset->SetParameters(1,0,1,1);
 
 	auto residual=getHistFromTreeInFile(fileName, "fitResults", "meanQuadDiff.x", cuts, "residual(60,-0.3,0.3)" ,"goff");
-	residual->SetTitle((fileName+";x-residual [mm];Events").c_str());
-	new TCanvas();
+	residual->SetTitle(std::string(";x-residual [mm];Events").c_str());
+	new TCanvas("meanQuadDiff.x");
 	residual->Draw();
+	residual->Fit(gausOffset);
 //	HistogramCombiner residualHistogrammer{"residual", residual};
 //	residualHistogrammer.makeLegend=false;
 //	residualHistogrammer.setStyle(3);
@@ -1539,9 +1542,10 @@ void drawQuadMeanResiduals( std::string fileName="combinedFit.root" ) {
 
 
 	auto pull=getHistFromTreeInFile(fileName, "fitResults", "meanQuadDiff.x/meanQuadError.x", cuts, "pull(50,-5,5)" ,"goff");
-	pull->SetTitle((fileName+";x-residual/#sigma_{x};Events").c_str());
-	new TCanvas();
+	pull->SetTitle(std::string(";x-residual/#sigma_{x};Events").c_str());
+	new TCanvas("meanQuadDiff.x/meanQuadError.x");
 	pull->Draw();
+	pull->Fit(gausOffset);
 //	HistogramCombiner pullHistogrammer{"pull", pull};
 //	pullHistogrammer.makeLegend=false;
 //	pullHistogrammer.setStyle(3);
@@ -1549,14 +1553,17 @@ void drawQuadMeanResiduals( std::string fileName="combinedFit.root" ) {
 
 
 	auto residualCenter=getHistFromTreeInFile(fileName, "fitResults", "centerDiffPerChipFit.x", cuts , "residualCenter(60,-0.3,0.3)" ,"goff");
-	residualCenter->SetTitle((fileName+";x-residual [mm];Events").c_str());
+	residualCenter->SetTitle(std::string(";x-residual [mm];Events").c_str());
 	new TCanvas();
 	residualCenter->Draw();
+	gausOffset->SetParameters(1,0,1,1);
+	residualCenter->Fit(gausOffset);
 
 	auto pullCenter=getHistFromTreeInFile(fileName, "fitResults", "centerDiffPerChipFit.x/centerErrorPerChipFit.x", cuts, "pullCenter(50,-5,5)" ,"goff");
-	pullCenter->SetTitle((fileName+";x-residual/#sigma_{x};Events").c_str());
+	pullCenter->SetTitle(std::string(";x-residual/#sigma_{x};Events").c_str());
 	new TCanvas();
 	pullCenter->Draw();
+	pullCenter->Fit(gausOffset);
 
 }
 

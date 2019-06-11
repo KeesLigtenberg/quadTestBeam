@@ -26,7 +26,8 @@ struct PositionHit : Hit{
 	unsigned char chip;
 	Vec3 residual{}, error{1,1,1};
 
-	enum class Flag : int {valid=1, highResidualxy=-1, highResidualz=-3, lowToT=-2, smallz=-4, debug=-5, shiftedTrigger=-6, outsideFiducial=-7} flag=Flag::valid;
+	enum class Flag : int {valid=1, highResidualxy=-1, highResidualz=-3, lowToT=-2, smallz=-4, debug=-5, shiftedTrigger=-6, outsideFiducial=-7}
+		flag=Flag::valid;
 	bool isValid() const { return flag==Flag::valid; }
 
 

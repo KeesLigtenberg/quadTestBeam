@@ -61,8 +61,8 @@ TrackCombiner::TrackCombiner(std::string quadFile, std::string telescopeFile, Al
 {
 	//init telescope
 	telescopeFitter.setAlignment(alignment);
-	telescopeFitter.makeMask(1E4);
-	telescopeFitter.maxResidual=0.05;
+	telescopeFitter.makeMask(1E5);
+	telescopeFitter.maxResidual=0.015;
 
 	//init quad fitter
 }
@@ -74,7 +74,7 @@ TrackCombiner::~TrackCombiner() {
 void TrackCombiner::openFile(std::string outputFileName) {
 	outputFile=std::unique_ptr<TFile>(new TFile(outputFileName.c_str(), "RECREATE"));
 
-	const bool makeOutputTree=false;
+	const bool makeOutputTree=true;
 	if(makeOutputTree) {
 		outputTree=std::unique_ptr<TTree>(new TTree("fitResults", "fitResults"));
 
@@ -138,7 +138,7 @@ void TrackCombiner::Process() {
 	std::cout<<"number of events: telescope="<<telescopeFitter.nEvents<<", timepix="<<quadFitter.numberOfEntries()<<"\n";
 
 	for(int telescopeEntryNumber=0,tpcEntryNumber=0; //5000000, 2308829
-			telescopeEntryNumber<5E6 //telescopeFitter.nEvents//1000000
+			telescopeEntryNumber<2E6 //telescopeFitter.nEvents//1000000
 			;) {
 		if(keepStatus) triggerStatusHistogram->reset();
 
