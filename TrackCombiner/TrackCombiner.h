@@ -87,7 +87,7 @@ private:
 		void Write() { statusHistogram->LabelsDeflate(); statusHistogram->Write(); };
 		std::shared_ptr<TH1D> statusHistogram;
 	};
-	const bool keepStatus=false;
+	const bool keepStatus=true;
 	std::unique_ptr<StatusKeeper> frameStatusHistogram{}, triggerStatusHistogram{}, timepixStatusHistogram{};
 	EntryBuffer<int, StatusKeeper> timepixStatusKeepers; //special buffered statusKeeper function
 

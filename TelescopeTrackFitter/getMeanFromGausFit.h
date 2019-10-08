@@ -42,8 +42,8 @@ inline double getMeanFromGausFit( TH1& hist ) {
 	return mean;
 }
 
-inline double getMeanFromGausFitAroundMean( TH1& hist ) {
-	TF1 gaus( "myGaus", "[0]*exp(-0.5*((x-[1])/[2])^2)", hist.GetMean()-hist.GetRMS(),  hist.GetMean()+hist.GetRMS());
+inline double getMeanFromGausFitAroundMean( TH1& hist, double factorRMSDown=1, double factorRMSUp=1) {
+	TF1 gaus( "myGaus", "[0]*exp(-0.5*((x-[1])/[2])^2)", hist.GetMean()-factorRMSDown*hist.GetRMS(),  hist.GetMean()+factorRMSUp*hist.GetRMS());
 	int meanParameterNumber=1;
 	double mean=0;
 	try{

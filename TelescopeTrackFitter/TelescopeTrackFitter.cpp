@@ -108,7 +108,7 @@ namespace {
 		simulatedQuadPosition=track.getHit(0).position;
 		track.scatterInVolume(0.070E-3, (quadExit-quadEntry)/2);
 		track.scatter(0.048E-3);
-		track.scatter(0.16E-3);//extra scatter
+//		track.scatter(0.16E-3);//extra scatter
 
 		track.scatterInVolume(0.088E-3, detector.planePosition[3]-quadExit);
 
@@ -554,7 +554,7 @@ std::vector<FitResult3D> TelescopeTrackFitter::getFits(std::vector<std::vector<P
 		if(hitsFirstThree.recalculateNPlanesHit()<=1 or hitsSecondThree.recalculateNPlanesHit()<=1) continue;
 		auto fitFirst=regressionFit3d(hitsFirstThree);
 		auto fitSecond=regressionFit3d(hitsSecondThree);
-		if( fabs(fitFirst.XZ.slope-fitSecond.XZ.slope) > 1E-3 or fabs(fitFirst.YZ.slope-fitSecond.YZ.slope) > 1E-3 ) continue;
+//		if( fabs(fitFirst.XZ.slope-fitSecond.XZ.slope) > 1E-3 or fabs(fitFirst.YZ.slope-fitSecond.YZ.slope) > 1E-3 ) continue;
 
 		hitCluster=calculateResiduals(hitCluster, fit);
 		fits.push_back(fit);

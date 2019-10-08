@@ -137,8 +137,10 @@ void TrackCombiner::Process() {
 
 	std::cout<<"number of events: telescope="<<telescopeFitter.nEvents<<", timepix="<<quadFitter.numberOfEntries()<<"\n";
 
+	bool pdfIsOpen=false;
+
 	for(int telescopeEntryNumber=0,tpcEntryNumber=0; //5000000, 2308829
-			telescopeEntryNumber<2E6 //telescopeFitter.nEvents//1000000
+			telescopeEntryNumber<1E6 //telescopeFitter.nEvents//1000000
 			;) {
 		if(keepStatus) triggerStatusHistogram->reset();
 
@@ -281,7 +283,7 @@ void TrackCombiner::Process() {
 
 
 				int sumShift=0, nValid=0;
-				short minShift=quadHitsWithResidual.front().nShiftedTrigger;
+				short minShift=1000;
 				{	for(const auto& h : quadHitsWithResidual) {
 						if(!h.isValid()) continue;
 						sumShift+=h.nShiftedTrigger;
@@ -297,6 +299,7 @@ void TrackCombiner::Process() {
 					replaceStatus(26, "Shifted trigger cut", tpcEntryNumber);
 					continue;
 				}
+				if(drawEvent) std::cout<<"min shift is "<<minShift<<" average is "<<sumShift/nValid<<"\n";
 
 				matched = true;
 				replaceStatus(100, "Successful", tpcEntryNumber);
@@ -490,7 +493,7 @@ void TrackCombiner::Process() {
 		}
 
 
-		if(drawEvent) {
+		if(drawEvent && matched) {
 			//		SimpleDetectorConfiguration setupForDrawing { 0,30 /*x*/, 0,42 /*y beam*/, -20,20/*z drift*/};
 			auto setupForDrawing=simpleDetectorFromChipCorners(alignment.getAllChipCorners());
 			setupForDrawing.minz=-1, setupForDrawing.maxz=11;
@@ -506,7 +509,7 @@ void TrackCombiner::Process() {
 			const bool draw3D=true;
 			if(draw3D) {
 				HoughTransformer::drawCluster(quadHits,setupForDrawing);
-				fittedTrack->draw( setupForDrawing.ymin(), setupForDrawing.ymax() );
+				if(fittedTrack) fittedTrack->draw( setupForDrawing.ymin(), setupForDrawing.ymax() );
 //				for (auto& f : telescopeFits)
 //					f.draw( setupForDrawing.ymin(), setupForDrawing.ymax() );
 //				for (auto& f : timepixFits)
@@ -529,6 +532,13 @@ void TrackCombiner::Process() {
 
 			gPad->Update();
 			if(processDrawSignals()) break;
+
+//			if(not pdfIsOpen) {
+//				gPad->Print("eventDisplays.pdf(");
+//				pdfIsOpen=true;
+//			} else {
+//				gPad->Print("eventDisplays.pdf");
+//			}
 		}
 
 	}
@@ -544,10 +554,14 @@ void TrackCombiner::Process() {
 		yCorrelation->cd();
 		outputTree->Draw("YZ.intercept+YZ.slope*172:z", "fabs(XZ.intercept+XZ.slope*172-x)<3", "", 1E4);
 	}
+
+	if(pdfIsOpen) {
+		gPad->Print("eventDisplays.pdf]");
+	}
 }
 
 void TrackCombiner::printTriggers(int telescopeEntry, int tpcEntry) {
-	int printEveryN=1000;
+	int printEveryN=1;
 	static int i=0;
 	using namespace std;
 //	if(telescopeEntry>287035) printEveryN=1;

@@ -366,9 +366,9 @@ inline void HoughTransformer::drawCluster(const T& cluster, const DetectorConfig
 	double totAxis=1.6;
 	static TCanvas* canv=new TCanvas("cluster_display", "Event display", 800,600);
 	canv->cd();
-//	pointTree.Draw( std::string("h.position.z:h.position.y:h.position.x:h.nShiftedTrigger").c_str() , "", "*colz"); //ToT to microseconds
+	pointTree.Draw( std::string("h.position.z:h.position.y:h.position.x:h.nShiftedTrigger").c_str() , "", "*colz"); //ToT to microseconds
 //	pointTree.Draw( ("h.position.z:h.position.y:h.position.x:TMath::Min(h.ToT*0.025, "+std::to_string(totAxis)+")").c_str() , "", "*colz"); //ToT to microseconds
-	pointTree.Draw( std::string("h.position.z:h.residual.y:h.residual.x:h.chip").c_str() , "", "*colz"); //ToT to microseconds
+//	pointTree.Draw( std::string("h.position.z:h.residual.y:h.residual.x:h.chip").c_str() , "", "*colz"); //ToT to microseconds
 
 	TH1* axisObject= dynamic_cast<TH1*>( gPad->GetPrimitive("htemp") );
 	if(!axisObject) {std::cout<<"could not get axis object!?\n"; throw 1;}
@@ -404,7 +404,8 @@ inline void HoughTransformer::drawCluster(const T& cluster, const DetectorConfig
 	palette->SetY2NDC(0.74);
 	palette->SetY1NDC(0.1);
 	//draw TPaveText over Palette axis title
-	auto paletteAxisLabel = new TPaveLabel(0.96,0.1,1,0.75, "ToT [#mus]", "NDC");
+//	auto paletteAxisLabel = new TPaveLabel(0.96,0.1,1,0.75, "ToT [#mus]", "NDC");
+	auto paletteAxisLabel = new TPaveLabel(0.96,0.1,1,0.75, "Frame [409.6 #mus]", "NDC");
 	paletteAxisLabel->SetFillColor(kWhite);
 	paletteAxisLabel->SetBorderSize(0);
 	paletteAxisLabel->SetTextAngle(90);
@@ -440,7 +441,7 @@ inline void drawCluster2D(const T& cluster, const DetectorConfiguration& detecto
 	for(auto& iHit : cluster ) {
 		h=iHit;
 //		std::cout<<int(h.ToT)<<"\n";
-		if(h.flag==PositionHit::Flag::shiftedTrigger) continue;
+//		if(h.flag==PositionHit::Flag::shiftedTrigger) continue;
 //		if(h.flag==PositionHit::Flag::valid)
 			pointTree.Fill();
 	}

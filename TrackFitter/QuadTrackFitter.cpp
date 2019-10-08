@@ -112,7 +112,7 @@ namespace {
 		return h;
 	}
 
-}
+}//end namespace
 
 
 
@@ -466,7 +466,7 @@ void QuadTrackFitter::Loop(std::string outputFile,const Alignment& alignment) {
 		fitResults.Fill();
 
 		bool draw=true;
-		if(draw and posHits.size()>200) {
+		if(draw) {
 //			std::cout<<cEntry<<": nHitsPassed="<<nHitsPassedTotal<<"\n";
 			std::cout<<cEntry<<": nHits="<<posHits.size()<<"\n";
 //			SimpleDetectorConfiguration setupForDrawing { 10,40 /*x*/, 0,42 /*y beam*/, -10,40/*z drift*/};
@@ -489,12 +489,12 @@ void QuadTrackFitter::Loop(std::string outputFile,const Alignment& alignment) {
 //			gPad->Update();
 //			if(processDrawSignals()) break;
 
-			if(not pdfIsOpen) {
-				gPad->Print("eventDisplays.pdf(");
-				pdfIsOpen=true;
-			} else {
-				gPad->Print("eventDisplays.pdf");
-			}
+//			if(not pdfIsOpen) {
+//				gPad->Print("eventDisplays.pdf(");
+//				pdfIsOpen=true;
+//			} else {
+//				gPad->Print("eventDisplays.pdf");
+//			}
 
 		}
 	}

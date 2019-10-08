@@ -42,7 +42,7 @@ void testFitTracks(std::string inputfile, std::string alignmentFile="align.dat")
 	telescopeFitter.maxResidual=0.015;
 //	telescopeFitter.displayEvent=false;
 //	telescopeFitter.doBinnedClustering=true;
-//	telescopeFitter.generateHits=true;
+	telescopeFitter.generateHits=true;
 	if(not telescopeFitter.generateHits) telescopeFitter.makeMask(5e3);
 
 	telescopeFitter.fitTracks("test.root");
